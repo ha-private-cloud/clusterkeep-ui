@@ -8,6 +8,9 @@ jobs:
   release:
     runs-on: [self-hosted]
     steps:
+      - name: Sync all repos
+        run: "$HOME/project/proxmox-tofu/scripts/sync-repos.sh"
+
       - name: Sync repo checkout to this tag
         run: |
           git -C "$HOME/project/clusterkeep-ui" fetch origin --tags
