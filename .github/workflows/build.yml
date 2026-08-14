@@ -1,12 +1,5 @@
 name: build
 
-# Runs on the CI bastion's self-hosted runner (see ../../proxmox-tofu's
-# "CI bastion" , provisioned there since it needs the kubeconfig and this
-# repo's gitignored tofu/terraform.tfvars, neither of which can live in
-# git). Builds+pushes via cluster-ci, then runs this repo's own Tofu to
-# deploy , that's what actually rolls the image out, since
-# clusterkeep-ui/tofu now auto-selects the newest tag on this branch's
-# channel on every apply (see tofu/clusterkeep-ui.tf).
 on:
   push:
     branches: [dev, preview, main]
@@ -23,16 +16,19 @@ jobs:
               echo "namespace=clusterkeep-dev-pub" >> "$GITHUB_OUTPUT"
               echo "workspace=default" >> "$GITHUB_OUTPUT"
               echo "tofu_args=" >> "$GITHUB_OUTPUT"
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
               ;;
             preview)
               echo "namespace=clusterkeep-prv-pub" >> "$GITHUB_OUTPUT"
               echo "workspace=prv" >> "$GITHUB_OUTPUT"
               echo "tofu_args=-var-file=prv.tfvars" >> "$GITHUB_OUTPUT"
+              echo "deploy=true" >> "$GITHUB_OUTPUT"
               ;;
             main)
               echo "namespace=clusterkeep-prd-pub" >> "$GITHUB_OUTPUT"
               echo "workspace=prd" >> "$GITHUB_OUTPUT"
               echo "tofu_args=-var-file=prd.tfvars" >> "$GITHUB_OUTPUT"
+              echo "deploy=false" >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "no environment mapped for branch ${{ github.ref_name }}" >&2
@@ -40,18 +36,8 @@ jobs:
               ;;
           esac
 
-      # This repo lives permanently at ~/project/clusterkeep-ui on the
-      # bastion (see proxmox-tofu/scripts/setup-bastion.sh) , cluster-cli
-      # and its Tofu both expect that fixed sibling-repo layout, so this
-      # syncs it in place rather than using actions/checkout's default
-      # per-job workspace path.
       - name: Sync repo checkout to this commit
         run: |
-          # checkout -B (not reset --hard on whatever's currently checked
-          # out) so HEAD ends up on a local branch actually named
-          # ${{ github.ref_name }} , cluster-cli's tag_for_branch reads that
-          # name to pick DEV-/PREVIEW-/plain, so a stale branch name here
-          # would silently mistag the image.
           git -C "$HOME/project/clusterkeep-ui" fetch origin "${{ github.ref_name }}"
           git -C "$HOME/project/clusterkeep-ui" checkout -B "${{ github.ref_name }}" "${{ github.sha }}"
 
@@ -62,6 +48,7 @@ jobs:
             --no-deploy
 
       - name: Deploy via tofu
+        if: steps.env.outputs.deploy == 'true'
         run: |
           cluster-cli tofu clusterkeep-ui workspace select "${{ steps.env.outputs.workspace }}"
           cluster-cli tofu clusterkeep-ui apply -auto-approve ${{ steps.env.outputs.tofu_args }}

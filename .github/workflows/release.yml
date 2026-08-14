@@ -1,0 +1,20 @@
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+jobs:
+  release:
+    runs-on: [self-hosted]
+    steps:
+      - name: Sync repo checkout to this tag
+        run: |
+          git -C "$HOME/project/clusterkeep-ui" fetch origin --tags
+          git -C "$HOME/project/clusterkeep-ui" checkout "${{ github.ref_name }}"
+
+      - name: Build, push, and deploy release
+        run: |
+          cluster-cli build "$HOME/project/clusterkeep-ui" \
+            --namespace clusterkeep-prd-pub \
+            --tag "${{ github.ref_name }}"

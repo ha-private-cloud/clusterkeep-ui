@@ -34,13 +34,13 @@ Lives at [`../charts/clusterkeep-ui`](../charts/clusterkeep-ui) , deliberately *
 
 `tofu/clusterkeep-ui.tf` does the initial install and owns structural changes (chart version, ingress config) via a `helm_release` pointed at `../charts/clusterkeep-ui`. The namespace itself is **not** created here , it's a cluster-wide primitive owned by `../cluster-config` (see its `clusterkeep-ui-namespaces.tf`); this repo's Tofu only looks it up by name and will fail with a clear "not found" error if it doesn't exist yet, so apply `cluster-config` first when standing up a new environment. Its Nexus pull-credentials Secret, if the registry needs auth, is created there too.
 
-Image tags are picked up automatically: every `tofu apply` queries Nexus's Docker Registry API (see `scripts/latest_image_tag.py`, an `external` data source , testable standalone without touching tofu at all) for the newest tag on this environment's channel and deploys that, no manual `image_tag` edit or separate CLI step needed. Which channel an environment tracks is `image_tag_prefix`:
+Image tags are picked up automatically for dev/preview: every `tofu apply` queries Nexus's Docker Registry API (see `scripts/latest_image_tag.py`, an `external` data source , testable standalone without touching tofu at all) for the newest tag on this environment's channel and deploys that, no manual `image_tag` edit or separate CLI step needed. Which channel an environment tracks is `image_tag_prefix`:
 
 - `default` workspace (built-in tfvars) , dev channel, picks the newest tag starting with `DEV-`
 - `prv` workspace (`prv.tfvars`) , preview channel, picks the newest tag starting with `PREVIEW-`
-- `prd` workspace (`prd.tfvars`) , release channel, picks the newest plain-digit tag (no prefix)
+- `prd` workspace (`prd.tfvars`) , `image_tag_prefix = ""` disables this lookup entirely; `image_tag` is used directly instead (see "Continuous deployment" below for why)
 
-Tags in the right shape come from `cluster-cli build`, which derives them from the app repo's checked-out branch (`dev`/`preview`/`main` , see `../cluster-cli/README.md`). `image_tag` is only a fallback, used if nothing on that channel has been pushed yet.
+Tags in the right shape come from `cluster-cli build`, which derives them from the app repo's checked-out branch (`dev`/`preview`/`main` , see `../cluster-cli/README.md`). For dev/preview, `image_tag` is only a fallback, used if nothing on that channel has been pushed yet. For prd, `image_tag` is authoritative , keep it in sync with the current release tag if you plan to `tofu apply` against prd.
 
 All `.tf` files live under `tofu/`. Create `tofu/terraform.tfvars`:
 
@@ -64,4 +64,9 @@ tofu apply
 
 ## Continuous deployment
 
-`.github/workflows/build.yml` runs on a self-hosted GitHub Actions runner (see `../proxmox-tofu`'s "CI bastion") on every push to `dev`, `preview`, or `main`: builds+pushes via `cluster-ci`, then runs this repo's own Tofu against the matching workspace to deploy , the auto tag-selection above is what makes that deploy step pick up the image the same push just built.
+`.github/workflows/build.yml` runs on a self-hosted GitHub Actions runner (see `../proxmox-tofu`'s "CI bastion") on every push to `dev`, `preview`, or `main`, builds+pushes via `cluster-ci`, then:
+
+- **`dev`/`preview`** , also runs this repo's own Tofu against the matching workspace to deploy, same as before , the auto tag-selection above is what makes that deploy step pick up the image the same push just built.
+- **`main`** , build+push only, no deploy. This keeps `main` always pointing at a known-good, pushed-but-undeployed image (a plain, unprefixed timestamp tag), ready to release without redeploying anything yet.
+
+Production deploys are tag-gated: pushing a `vX.Y.Z` tag from `main` (`git tag v1.2.3 && git push origin v1.2.3`) triggers `.github/workflows/release.yml`, which builds+pushes the image with that exact tag and deploys it straight to `clusterkeep-prd-pub` via `cluster-cli build --tag`, no tofu involved. `tofu apply` against the `prd` workspace is now only for structural changes (ingress config, chart version bumps) , since prd's `image_tag_prefix` is `""`, it deploys whatever `image_tag` is set to in `prd.tfvars` rather than auto-picking a release, so keep that in sync with the current release tag before running it.

@@ -17,12 +17,12 @@ variable "image_repository" {
 }
 
 variable "image_tag" {
-  description = "Fallback image tag, used only if no pushed tag matches image_tag_prefix yet (e.g. a brand-new environment). Normally tofu resolves the tag itself , see the external data source in clusterkeep-ui.tf."
+  description = "For dev/preview (image_tag_prefix != \"\"): fallback tag, used only if no pushed tag matches image_tag_prefix yet (e.g. a brand-new environment) , tofu normally resolves the tag itself, see the external data source in clusterkeep-ui.tf. For prd (image_tag_prefix == \"\"): authoritative, used directly on every apply , release tags are pinned via release.yml's `cluster-cli build --tag`, not auto-picked, so keep this in sync with the current release tag before applying against prd."
   type        = string
 }
 
 variable "image_tag_prefix" {
-  description = "Which branch's tag channel this environment tracks , \"DEV-\" or \"PREVIEW-\" (cluster-cli's branch-based tag prefixes, see ../../cluster-cli/README.md), or \"\" to pick the newest plain-numeric (release/main) tag. Every tofu apply deploys the newest pushed tag matching this."
+  description = "Which branch's tag channel this environment tracks , \"DEV-\" or \"PREVIEW-\" (cluster-cli's branch-based tag prefixes, see ../../cluster-cli/README.md). \"\" (prd) disables the auto-latest-tag lookup entirely , release tags are vX.Y.Z, not plain-numeric, so var.image_tag is used directly instead (see clusterkeep-ui.tf's locals)."
   type        = string
   default     = "DEV-"
 }
