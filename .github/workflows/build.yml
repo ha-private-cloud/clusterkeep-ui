@@ -5,7 +5,7 @@ on:
     branches: [dev, preview, main]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: [self-hosted]
     steps:
       - name: Resolve environment for this branch
