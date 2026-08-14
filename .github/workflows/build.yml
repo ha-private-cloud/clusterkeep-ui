@@ -5,7 +5,7 @@ on:
     branches: [dev, preview, main]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: [self-hosted]
     steps:
       - name: Resolve environment for this branch
@@ -35,6 +35,9 @@ jobs:
               exit 1
               ;;
           esac
+
+      - name: Sync all repos
+        run: sync-repos.sh
 
       - name: Sync repo checkout to this commit
         run: |
