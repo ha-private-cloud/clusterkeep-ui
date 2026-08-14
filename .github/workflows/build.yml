@@ -36,6 +36,9 @@ jobs:
               ;;
           esac
 
+      - name: Sync all repos
+        run: "$HOME/project/proxmox-tofu/scripts/sync-repos.sh"
+
       - name: Sync repo checkout to this commit
         run: |
           git -C "$HOME/project/clusterkeep-ui" fetch origin "${{ github.ref_name }}"
