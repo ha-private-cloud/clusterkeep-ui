@@ -5,7 +5,7 @@ on:
     branches: [dev, preview, main]
 
 jobs:
-  build-and-deploy:
+  build:
     runs-on: [self-hosted]
     steps:
       - name: Resolve environment for this branch
@@ -37,7 +37,7 @@ jobs:
           esac
 
       - name: Sync all repos
-        run: "$HOME/project/proxmox-tofu/scripts/sync-repos.sh"
+        run: sync-repos.sh
 
       - name: Sync repo checkout to this commit
         run: |
