@@ -2,7 +2,8 @@ name: build
 
 on:
   push:
-    branches: [dev, preview, main]
+    branches: [development, preview, main]
+  workflow_dispatch:
 
 jobs:
   build:
@@ -12,7 +13,7 @@ jobs:
         id: env
         run: |
           case "${{ github.ref_name }}" in
-            dev)
+            development)
               echo "namespace=clusterkeep-dev-pub" >> "$GITHUB_OUTPUT"
               echo "workspace=default" >> "$GITHUB_OUTPUT"
               echo "tofu_args=" >> "$GITHUB_OUTPUT"
