@@ -1,0 +1,26 @@
+services:
+  clusterkeep-ui:
+    container_name: clusterkeep-ui
+    build:
+      context: ./clusterkeep-ui
+      dockerfile: Dockerfile.dev
+    restart: on-failure
+    ports:
+      - "127.0.0.1:9080:5000"
+    environment:
+      APP_TITLE: ${APP_TITLE:-ClusterKeep}
+    volumes:
+      - ./clusterkeep-ui/app.py:/app/app.py:ro
+      - ./clusterkeep-ui/templates:/app/templates:ro
+      - ./clusterkeep-ui/static:/app/static:ro
+      - ./clusterkeep-ui/tests:/app/tests:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=3)
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
