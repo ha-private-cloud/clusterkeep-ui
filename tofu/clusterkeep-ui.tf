@@ -38,6 +38,10 @@ locals {
   )
 }
 
+resource "helm_release" "clusterkeep_ui" {
+  name      = "clusterkeep-ui"
+  chart     = "${path.module}/../../charts/clusterkeep-ui"
+  namespace = data.kubernetes_namespace.clusterkeep_ui.metadata[0].name
 
   atomic = true
 
