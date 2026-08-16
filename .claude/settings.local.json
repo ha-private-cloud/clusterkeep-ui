@@ -70,7 +70,9 @@
       "Bash(find /home/busta/project/cluster-ci/runner -type f -not -path \"*__pycache__*\" -not -path \"*.venv*\")",
       "Bash(echo \"---secret exists?---\")",
       "Bash(echo \"---pvc---\")",
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(uv sync *)",
+      "Bash(pip3 install *)"
     ]
   }
 }

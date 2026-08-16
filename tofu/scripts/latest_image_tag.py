@@ -9,7 +9,7 @@ Used as a Terraform `external` data source: reads a JSON query object on
 stdin, writes a JSON object of strings on stdout. Runnable standalone for
 testing without touching tofu at all, e.g.:
 
-  echo '{"registry_host":"registry.talos.lab","repo":"clusterkeep-ui","prefix":"DEV-","username":"","password":""}' \\
+  echo '{"registry_host":"registry.clusterkeep.dev.net","repo":"clusterkeep-ui","prefix":"DEV-","username":"","password":""}' \\
     | python3 latest_image_tag.py
 """
 import json
@@ -22,7 +22,7 @@ from base64 import b64encode
 
 CHALLENGE_RE = re.compile(r'Bearer realm="([^"]+)",service="([^"]+)"')
 
-# Every *.talos.lab host sits behind ingress-nginx's self-signed default
+# Every *.clusterkeep.dev.net host sits behind ingress-nginx's self-signed default
 # cert (see cluster-config/README.md) , same "accept self-signed on the
 # LAN" reasoning cluster-cli's client.py and Kaniko's --skip-tls-verify use.
 _UNVERIFIED_SSL_CONTEXT = ssl._create_unverified_context()

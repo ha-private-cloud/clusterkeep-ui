@@ -1,7 +1,13 @@
+import re
+from pathlib import Path
+
 import pytest
 
 from app import app
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+TEMPLATES = REPO_ROOT / "templates"
+STATIC = REPO_ROOT / "static"
 
 @pytest.fixture
 def client():
@@ -9,14 +15,136 @@ def client():
     with app.test_client() as c:
         yield c
 
-
 def test_index_renders_title(client):
     resp = client.get("/")
     assert resp.status_code == 200
     assert b"ClusterKeep" in resp.data
 
-
 def test_healthz(client):
     resp = client.get("/healthz")
     assert resp.status_code == 200
     assert resp.get_json() == {"status": "ok"}
+
+def test_index_renders_banner(client):
+    """From base.html, so every page inherits it."""
+    body = client.get("/").get_data(as_text=True)
+    assert "<header" in body
+    assert 'class="brand-mark"' in body
+    assert "GitHub" in body
+
+def test_index_links_favicon(client):
+    body = client.get("/").get_data(as_text=True)
+    assert 'type="image/svg+xml"' in body
+    assert "images/favicon.svg" in body
+
+def test_favicon_is_served(client):
+    resp = client.get("/static/images/favicon.svg")
+    assert resp.status_code == 200
+    assert "svg" in resp.headers["Content-Type"]
+
+def test_security_headers_on_every_response(client):
+    """after_request, so static files carry them too."""
+    for path in ["/", "/healthz", "/static/css/style.css"]:
+        headers = client.get(path).headers
+        assert headers["X-Content-Type-Options"] == "nosniff", path
+        assert headers["X-Frame-Options"] == "DENY", path
+        assert headers["Referrer-Policy"] == "no-referrer", path
+        assert "Content-Security-Policy" in headers, path
+
+def test_content_security_policy_stays_strict(client):
+    """Relaxing any of these is a real change in exposure -- do it knowingly."""
+    csp = client.get("/").headers["Content-Security-Policy"]
+    assert "unsafe-inline" not in csp
+    assert "unsafe-eval" not in csp
+    assert "script-src 'self'" in csp
+    assert "frame-ancestors 'none'" in csp
+    assert "default-src 'self'" in csp
+
+def test_no_inline_scripts_or_handlers():
+    """CSP blocks these at runtime; catch them at author time instead."""
+    for template in TEMPLATES.rglob("*.html"):
+        markup = template.read_text()
+        assert not re.search(r"<script(?![^>]*\bsrc=)", markup), (
+            f"{template.name} has an inline <script>; CSP blocks it -- put the "
+            "code in static/js/ and load it with src="
+        )
+        assert not re.search(r"\son[a-z]+\s*=\s*[\"']", markup), (
+            f"{template.name} has an inline event handler; CSP blocks it"
+        )
+
+def test_logo_and_favicon_geometry_match():
+    """Nothing else would catch the two copies of the mark drifting apart."""
+    inline = (TEMPLATES / "partials" / "logo.html").read_text()
+    favicon = (STATIC / "images" / "favicon.svg").read_text()
+    assert re.findall(r'd="([^"]+)"', inline) == re.findall(r'd="([^"]+)"', favicon)
+
+def test_mark_is_built_on_the_cell_grid():
+    """Integer coordinates are what make the mark exact at 16px."""
+    inline = (TEMPLATES / "partials" / "logo.html").read_text()
+    assert 'viewBox="0 0 16 16"' in inline
+    assert 'shape-rendering="crispEdges"' in inline
+    (data,) = re.findall(r'd="([^"]+)"', inline)
+    for number in re.findall(r"-?\d+(?:\.\d+)?", data):
+        assert "." not in number, f"non-integer coordinate {number!r} in the mark"
+
+def test_mark_path_is_not_duplicated_into_pages():
+    """A third copy would escape the drift guard, which only checks two."""
+    for template in TEMPLATES.rglob("*.html"):
+        if template.name == "logo.html":
+            continue
+        assert 'fill-rule="evenodd"' not in template.read_text(), (
+            f"{template.name} appears to inline the mark; include the partial instead"
+        )
+
+FETCHING_TAGS = r"link|script|img|iframe|source|video|audio|embed|object|track"
+
+def test_templates_request_no_third_party_assets():
+    tags = re.compile(rf"<(?:{FETCHING_TAGS})\b[^>]*>", re.I | re.S)
+    urls = re.compile(r'(?:href|src)\s*=\s*"(https?://[^"]+)"', re.I)
+    for template in TEMPLATES.rglob("*.html"):
+        for tag in tags.findall(template.read_text()):
+            for url in urls.findall(tag):
+                assert False, f"{template.name} loads a remote asset: {url}"
+
+def test_fonts_are_self_hosted():
+    """@font-face sources must be local and must actually exist."""
+    css = (STATIC / "css" / "style.css").read_text()
+    sources = re.findall(r'src:\s*url\("([^"]+)"\)', css)
+    assert sources, "no @font-face rules found in the built stylesheet"
+    for src in sources:
+        assert not src.startswith("http"), f"remote font source: {src}"
+        resolved = (STATIC / "css" / src).resolve()
+        assert resolved.is_file(), f"missing font file: {resolved}"
+
+def test_stylesheet_is_built_from_current_source():
+    """Marker classes the templates rely on must be in the build."""
+    css = (STATIC / "css" / "style.css").read_text()
+    for marker in [".mark-lg .brand-mark", "Cinzel", "Inter"]:
+        assert marker in css, f"{marker!r} missing -- run `npm run build:css`"
+
+LOCAL_CLASSES = {"brand-mark", "mark-lg", "group", "antialiased"}
+
+def tailwind_selector(cls):
+    """Variants keep their prefix (`hover:bg-x` -> `.hover\\:bg-x:hover`), so do
+    not strip it. Everything outside [A-Za-z0-9_-] is backslash-escaped."""
+    return "." + re.sub(r"([^A-Za-z0-9_-])", r"\\\1", cls)
+
+def tailwind_classes_used():
+    """Every class referenced by a template, minus our own non-generated ones."""
+    used = set()
+    for template in TEMPLATES.rglob("*.html"):
+        for value in re.findall(r'class="([^"]*)"', template.read_text()):
+            used.update(c for c in value.split() if c not in LOCAL_CLASSES)
+    return used
+
+def test_every_utility_used_by_a_template_is_in_the_build():
+    """style.css is committed and nothing rebuilds it in CI, so it can ship
+    stale after a template edit. The page still renders -- just wrong."""
+    css = (STATIC / "css" / "style.css").read_text()
+    missing = sorted(
+        cls for cls in tailwind_classes_used() if tailwind_selector(cls) not in css
+    )
+    assert not missing, (
+        f"utilities used in templates but absent from style.css: {missing}\n"
+        "run `npm run build:css` and commit the result"
+    )

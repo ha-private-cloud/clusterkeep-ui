@@ -1,17 +1,30 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ title }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
-  </head>
-  <body>
-    <main class="hero">
-      <header>
-        <h1>{{ title }}</h1>
-      </header>
-      <p class="hero-subtitle">Coming soon...</p>
-    </main>
-  </body>
-</html>
+{% extends "base.html" %}
+
+{% block content %}
+<div class="flex flex-col items-center text-center max-w-3xl mx-auto">
+  <span
+    class="mark-lg flex items-center justify-center w-20 h-20 rounded-xl bg-stone-800 text-white mb-8"
+  >
+    {% include "partials/logo.html" %}
+  </span>
+
+  <h1
+    class="font-display text-5xl md:text-6xl font-bold text-stone-900 dark:text-stone-50 tracking-tight leading-tight mb-6"
+  >
+    {{ title }}
+  </h1>
+
+  <p class="text-lg text-stone-600 dark:text-stone-300 mb-10 max-w-xl">
+    Coming soon. Track progress on GitHub.
+  </p>
+
+  <a
+    href="https://github.com/ha-private-cloud"
+    target="_blank"
+    rel="noopener noreferrer"
+    class="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-amber-700 rounded-lg hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-700 dark:focus-visible:ring-offset-stone-950"
+  >
+    View on GitHub
+  </a>
+</div>
+{% endblock %}
