@@ -12,3 +12,4 @@ prd.tfvars
 prv.tfvars
 crash.log
 crash.*.log
+.claude/
