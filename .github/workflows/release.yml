@@ -3,9 +3,20 @@ name: release
 on:
   push:
     tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to deploy to prd (check its build run first)"
+        required: true
+        type: string
+
+concurrency:
+  group: release-clusterkeep-ui
+  cancel-in-progress: false
 
 jobs:
-  release:
+  build:
+    if: github.event_name == 'push'
     runs-on: [self-hosted]
     steps:
       - name: Sync cluster-cli
@@ -16,8 +27,23 @@ jobs:
           git -C "$HOME/project/clusterkeep-ui" fetch origin --tags
           git -C "$HOME/project/clusterkeep-ui" checkout "${{ github.ref_name }}"
 
-      - name: Build, push, and deploy release
+      - name: Build and push release image
         run: |
           cluster-cli build "$HOME/project/clusterkeep-ui" \
             --namespace clusterkeep-prd-pub \
-            --tag "${{ github.ref_name }}"
+            --tag "${{ github.ref_name }}" \
+            --no-deploy
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: [self-hosted]
+    steps:
+      - name: Sync cluster-cli
+        run: sync-repos.sh cluster-cli
+
+      - name: Deploy release to prd
+        run: |
+          cluster-cli deploy \
+            --app clusterkeep-ui \
+            --namespace clusterkeep-prd-pub \
+            --tag "${{ inputs.tag }}"
