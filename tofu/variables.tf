@@ -30,7 +30,7 @@ variable "image_tag_prefix" {
 variable "ingress_hostname" {
   description = "Hostname the clusterkeep-ui UI will be served on via Ingress."
   type        = string
-  default     = "clusterkeep.talos.lab"
+  default     = "dev.clusterkeep.dev.net"
 }
 
 variable "ingress_enabled" {
