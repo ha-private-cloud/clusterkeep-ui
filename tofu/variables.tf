@@ -13,7 +13,7 @@ variable "namespace" {
 variable "image_repository" {
   description = "Registry + repository for the clusterkeep-ui image (the in-cluster Nexus docker-hosted repo, provisioned in cluster-config)."
   type        = string
-  default     = "registry.talos.lab/clusterkeep-ui"
+  default     = "registry.clusterkeep.dev.net/clusterkeep-ui"
 }
 
 variable "image_tag" {
@@ -30,7 +30,7 @@ variable "image_tag_prefix" {
 variable "ingress_hostname" {
   description = "Hostname the clusterkeep-ui UI will be served on via Ingress."
   type        = string
-  default     = "clusterkeep.talos.lab"
+  default     = "dev.clusterkeep.dev.net"
 }
 
 variable "ingress_enabled" {

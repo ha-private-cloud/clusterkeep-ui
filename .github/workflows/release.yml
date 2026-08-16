@@ -8,8 +8,8 @@ jobs:
   release:
     runs-on: [self-hosted]
     steps:
-      - name: Sync all repos
-        run: sync-repos.sh
+      - name: Sync cluster-cli
+        run: sync-repos.sh cluster-cli
 
       - name: Sync repo checkout to this tag
         run: |
