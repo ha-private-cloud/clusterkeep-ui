@@ -5,6 +5,10 @@ on:
     branches: [development, preview, main]
   workflow_dispatch:
 
+concurrency:
+  group: tofu-clusterkeep-ui
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: [self-hosted]
@@ -37,8 +41,8 @@ jobs:
               ;;
           esac
 
-      - name: Sync all repos
-        run: sync-repos.sh
+      - name: Sync cluster-cli
+        run: sync-repos.sh cluster-cli
 
       - name: Sync repo checkout to this commit
         run: |
