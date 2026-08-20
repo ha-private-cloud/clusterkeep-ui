@@ -15,35 +15,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    if: github.event_name == 'push'
-    runs-on: [self-hosted]
-    steps:
-      - name: Sync cluster-cli
-        run: sync-repos.sh cluster-cli
-
-      - name: Sync repo checkout to this tag
-        run: |
-          git -C "$HOME/project/clusterkeep-ui" fetch origin --tags
-          git -C "$HOME/project/clusterkeep-ui" checkout "${{ github.ref_name }}"
-
-      - name: Build and push release image
-        run: |
-          cluster-cli build "$HOME/project/clusterkeep-ui" \
-            --namespace clusterkeep-prd-pub \
-            --tag "${{ github.ref_name }}" \
-            --no-deploy
-
-  deploy:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted]
-    steps:
-      - name: Sync cluster-cli
-        run: sync-repos.sh cluster-cli
-
-      - name: Deploy release to prd
-        run: |
-          cluster-cli deploy \
-            --app clusterkeep-ui \
-            --namespace clusterkeep-prd-pub \
-            --tag "${{ inputs.tag }}"
+  release:
+    uses: ha-private-cloud/pipelines/.github/workflows/app-release.yml@main
+    with:
+      app: clusterkeep-ui
+      tag: ${{ inputs.tag || github.ref_name }}
+      deploy: ${{ github.event_name == 'workflow_dispatch' }}
