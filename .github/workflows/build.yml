@@ -11,52 +11,6 @@ concurrency:
 
 jobs:
   build:
-    runs-on: [self-hosted]
-    steps:
-      - name: Resolve environment for this branch
-        id: env
-        run: |
-          case "${{ github.ref_name }}" in
-            development)
-              echo "namespace=clusterkeep-dev-pub" >> "$GITHUB_OUTPUT"
-              echo "workspace=default" >> "$GITHUB_OUTPUT"
-              echo "tofu_args=" >> "$GITHUB_OUTPUT"
-              echo "deploy=true" >> "$GITHUB_OUTPUT"
-              ;;
-            preview)
-              echo "namespace=clusterkeep-prv-pub" >> "$GITHUB_OUTPUT"
-              echo "workspace=prv" >> "$GITHUB_OUTPUT"
-              echo "tofu_args=-var-file=prv.tfvars" >> "$GITHUB_OUTPUT"
-              echo "deploy=true" >> "$GITHUB_OUTPUT"
-              ;;
-            main)
-              echo "namespace=clusterkeep-prd-pub" >> "$GITHUB_OUTPUT"
-              echo "workspace=prd" >> "$GITHUB_OUTPUT"
-              echo "tofu_args=-var-file=prd.tfvars" >> "$GITHUB_OUTPUT"
-              echo "deploy=false" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "no environment mapped for branch ${{ github.ref_name }}" >&2
-              exit 1
-              ;;
-          esac
-
-      - name: Sync cluster-cli
-        run: sync-repos.sh cluster-cli
-
-      - name: Sync repo checkout to this commit
-        run: |
-          git -C "$HOME/project/clusterkeep-ui" fetch origin "${{ github.ref_name }}"
-          git -C "$HOME/project/clusterkeep-ui" checkout -B "${{ github.ref_name }}" "${{ github.sha }}"
-
-      - name: Build and push image
-        run: |
-          cluster-cli build "$HOME/project/clusterkeep-ui" \
-            --namespace "${{ steps.env.outputs.namespace }}" \
-            --no-deploy
-
-      - name: Deploy via tofu
-        if: steps.env.outputs.deploy == 'true'
-        run: |
-          cluster-cli tofu clusterkeep-ui workspace select "${{ steps.env.outputs.workspace }}"
-          cluster-cli tofu clusterkeep-ui apply -auto-approve ${{ steps.env.outputs.tofu_args }}
+    uses: ha-private-cloud/pipelines/.github/workflows/app-build.yml@main
+    with:
+      app: clusterkeep-ui
