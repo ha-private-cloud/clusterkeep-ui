@@ -58,5 +58,6 @@ jobs:
       - name: Deploy via tofu
         if: steps.env.outputs.deploy == 'true'
         run: |
+          cluster-cli tofu clusterkeep-ui init -input=false
           cluster-cli tofu clusterkeep-ui workspace select "${{ steps.env.outputs.workspace }}"
           cluster-cli tofu clusterkeep-ui apply -auto-approve ${{ steps.env.outputs.tofu_args }}
