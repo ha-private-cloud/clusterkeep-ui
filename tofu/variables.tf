@@ -39,6 +39,18 @@ variable "ingress_enabled" {
   default     = true
 }
 
+variable "auth_api_base_url" {
+  description = "Base URL of the auth-api OIDC identity provider this environment logs in against. The UI only links out to its /login endpoint with headlamp_url as the next parameter , it does no auth itself. Set to \"\" to hide the login button entirely."
+  type        = string
+  default     = "https://auth-dev.clusterkeep.dev.net"
+}
+
+variable "headlamp_url" {
+  description = "URL auth-api sends the browser to once the SSO session is established , the Headlamp instance this environment's login button targets. Set to \"\" to hide the login button entirely."
+  type        = string
+  default     = "https://headlamp.clusterkeep.dev.net"
+}
+
 variable "image_pull_secret_name" {
   description = "Name of the imagePullSecret to use, if the Nexus docker-hosted repo requires auth. Created in cluster-config (see its clusterkeep-ui-namespaces.tf), not here , leave blank if the repo allows anonymous pulls."
   type        = string

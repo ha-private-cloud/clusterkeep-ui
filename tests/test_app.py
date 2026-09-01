@@ -148,3 +148,46 @@ def test_every_utility_used_by_a_template_is_in_the_build():
         f"utilities used in templates but absent from style.css: {missing}\n"
         "run `npm run build:css` and commit the result"
     )
+
+DEV_HEADLAMP_LOGIN_URL = (
+    "https://auth-dev.clusterkeep.dev.net/login"
+    "?next=https%3A%2F%2Fheadlamp.clusterkeep.dev.net"
+)
+
+def headlamp_login_href(body):
+    hrefs = re.findall(r'<a\s+href="([^"]*)"\s+data-headlamp-login\b', body)
+    return hrefs[0] if hrefs else None
+
+def test_headlamp_button_renders_with_dev_defaults(client):
+    body = client.get("/").get_data(as_text=True)
+    assert "Log in to Headlamp" in body
+    assert headlamp_login_href(body) == DEV_HEADLAMP_LOGIN_URL
+
+def test_headlamp_button_encodes_the_next_parameter(client, monkeypatch):
+    """auth-api reads `next` as one value; an unencoded URL would split it."""
+    monkeypatch.setitem(app.config, "AUTH_API_BASE_URL", "https://auth.example.net/")
+    monkeypatch.setitem(app.config, "HEADLAMP_URL", "https://lamp.example.net/c?a=1&b=2")
+    href = headlamp_login_href(client.get("/").get_data(as_text=True))
+    assert href == (
+        "https://auth.example.net/login"
+        "?next=https%3A%2F%2Flamp.example.net%2Fc%3Fa%3D1%26b%3D2"
+    )
+
+@pytest.mark.parametrize(
+    ("auth_api_base_url", "headlamp_url"),
+    [
+        ("", "https://headlamp.clusterkeep.dev.net"),
+        ("https://auth-dev.clusterkeep.dev.net", ""),
+        ("", ""),
+        ("javascript:alert(1)", "https://headlamp.clusterkeep.dev.net"),
+        ("https://auth-dev.clusterkeep.dev.net", "javascript:alert(1)"),
+    ],
+)
+def test_headlamp_button_absent_when_not_configured(
+    client, monkeypatch, auth_api_base_url, headlamp_url
+):
+    monkeypatch.setitem(app.config, "AUTH_API_BASE_URL", auth_api_base_url)
+    monkeypatch.setitem(app.config, "HEADLAMP_URL", headlamp_url)
+    body = client.get("/").get_data(as_text=True)
+    assert "Log in to Headlamp" not in body
+    assert headlamp_login_href(body) is None
