@@ -95,8 +95,17 @@ def _register_with_auth_api(username, password, email):
     if upstream.status_code == 409:
         return None, "That username is already taken."
     if upstream.status_code == 422:
-        return None, "Check your email address and make sure the password is at least 12 characters."
+        return None, _describe_validation_error(upstream)
     return None, "Could not create that account."
+
+
+def _describe_validation_error(upstream):
+    try:
+        detail = upstream.json()["detail"]
+        messages = [item["msg"] for item in detail]
+    except (ValueError, KeyError, TypeError):
+        return "Check your email address and make sure the password is at least 12 characters."
+    return " ".join(messages) if messages else "Check your account details and try again."
 
 
 @app.context_processor
