@@ -30,7 +30,7 @@ CONTENT_SECURITY_POLICY = "; ".join(
         "img-src 'self'",
         "connect-src 'self'",
         "base-uri 'none'",
-        "form-action 'none'",
+        "form-action 'self'",
         "frame-ancestors 'none'",
     ]
 )
@@ -77,7 +77,7 @@ def storage_login_url():
     return f"{auth_api_base_url.rstrip('/')}/login?{query}"
 
 
-def _register_with_auth_api(username, password):
+def _register_with_auth_api(username, password, email):
     """Server-to-server, gated by a bearer token only this backend holds -- the invite
     code alone is not enough to reach auth-api's registration endpoint."""
     auth_api_base_url = app.config["AUTH_API_BASE_URL"]
@@ -88,7 +88,7 @@ def _register_with_auth_api(username, password):
     try:
         upstream = requests.post(
             f"{auth_api_base_url.rstrip('/')}/api/v1/register",
-            json={"username": username, "password": password},
+            json={"username": username, "password": password, "email": email},
             headers={"Authorization": f"Bearer {registration_token}"},
             timeout=5,
         )
@@ -104,7 +104,7 @@ def _register_with_auth_api(username, password):
     if upstream.status_code == 409:
         return None, "That username is already taken."
     if upstream.status_code == 422:
-        return None, "Password must be at least 12 characters."
+        return None, "Check your email address and make sure the password is at least 12 characters."
     return None, "Could not create that account."
 
 
@@ -133,16 +133,19 @@ def join():
     if request.method == "POST":
         submitted_code = request.form.get("invite_code", "")
         username = request.form.get("username", "")
+        email = request.form.get("email", "")
         password = request.form.get("password", "")
         password_confirm = request.form.get("password_confirm", "")
         expected = app.config["INVITE_CODE"]
 
         if not (expected and submitted_code == expected):
             error = "That invite code is not valid."
+        elif not email:
+            error = "An email address is required."
         elif password != password_confirm:
             error = "Passwords do not match."
         else:
-            response, error = _register_with_auth_api(username, password)
+            response, error = _register_with_auth_api(username, password, email)
             if response is not None:
                 return response
 

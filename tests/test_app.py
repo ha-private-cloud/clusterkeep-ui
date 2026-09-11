@@ -201,6 +201,7 @@ def test_join_page_renders_invite_and_account_form_and_login_link(client):
     body = client.get("/join").get_data(as_text=True)
     assert 'name="invite_code"' in body
     assert 'name="username"' in body
+    assert 'name="email"' in body
     assert 'name="password"' in body
     assert (
         "https://auth-dev.clusterkeep.dev.net/login"
@@ -210,6 +211,7 @@ def test_join_page_renders_invite_and_account_form_and_login_link(client):
 JOIN_FORM = {
     "invite_code": "c1u513r01K3Ep",
     "username": "newuser",
+    "email": "newuser@example.com",
     "password": "a-long-enough-password",
     "password_confirm": "a-long-enough-password",
 }
@@ -248,6 +250,14 @@ def test_mismatched_passwords_are_rejected(client, monkeypatch):
     response = client.post("/join", data={**JOIN_FORM, "password_confirm": "something-else"})
     assert response.status_code == 200
     assert "do not match" in response.get_data(as_text=True)
+
+def test_missing_email_is_rejected_without_calling_auth_api(client, monkeypatch):
+    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+    with responses_lib.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        response = client.post("/join", data={**JOIN_FORM, "email": ""})
+        assert len(rsps.calls) == 0
+    assert response.status_code == 200
+    assert "email address is required" in response.get_data(as_text=True)
 
 def test_taken_username_shows_auth_apis_error(client, monkeypatch):
     monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
