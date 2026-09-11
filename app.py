@@ -22,9 +22,6 @@ app.config["AUTH_API_BASE_URL"] = os.environ.get(
 app.config["AUTH_API_INTERNAL_URL"] = os.environ.get(
     "AUTH_API_INTERNAL_URL", "http://auth-api.clusterkeep-dev-priv.svc.cluster.local"
 ).strip()
-app.config["HEADLAMP_URL"] = os.environ.get(
-    "HEADLAMP_URL", "https://headlamp.clusterkeep.dev.net"
-).strip()
 app.config["STORAGE_UI_URL"] = os.environ.get(
     "STORAGE_UI_URL", "https://storage-dev.clusterkeep.dev.net"
 ).strip()
@@ -64,17 +61,6 @@ def set_security_headers(response):
 
 def _is_http_url(value):
     return urlsplit(value).scheme in ("http", "https")
-
-
-def headlamp_login_url():
-    auth_api_base_url = app.config["AUTH_API_BASE_URL"]
-    headlamp_url = app.config["HEADLAMP_URL"]
-    if not (auth_api_base_url and headlamp_url):
-        return None
-    if not (_is_http_url(auth_api_base_url) and _is_http_url(headlamp_url)):
-        return None
-    query = urlencode({"next": headlamp_url})
-    return f"{auth_api_base_url.rstrip('/')}/login?{query}"
 
 
 def storage_login_url():
@@ -164,7 +150,6 @@ def inject_globals():
     return {
         "title": APP_TITLE,
         "year": datetime.now(timezone.utc).year,
-        "headlamp_login_url": headlamp_login_url(),
     }
 
 

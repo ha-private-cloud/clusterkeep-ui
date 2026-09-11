@@ -51,12 +51,6 @@ variable "auth_api_internal_url" {
   default     = "http://auth-api.clusterkeep-dev-priv.svc.cluster.local"
 }
 
-variable "headlamp_url" {
-  description = "Headlamp URL this environment's login button targets. Set to \"\" to hide the login button."
-  type        = string
-  default     = "https://headlamp.clusterkeep.dev.net"
-}
-
 variable "storage_ui_base_url" {
   description = "storage-ui URL a user is sent to after logging in or registering via the /join invite gate."
   type        = string
