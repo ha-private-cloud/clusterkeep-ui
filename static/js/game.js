@@ -38,6 +38,7 @@
     score = 0;
     gameOver = false;
     scorePrompted = false;
+    hideScoreForm();
   }
 
   function renderLeaderboard(entries) {
@@ -64,22 +65,43 @@
     });
   }
 
-  function promptForLeaderboard(finalScore) {
-    const raw = window.prompt("Game over! Enter 3 letters for the leaderboard:", "");
-    const initials = (raw || "").trim().toUpperCase();
-    if (!/^[A-Z]{3}$/.test(initials)) return;
-    fetch("/game/score", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ initials: initials, score: finalScore }),
-    })
-      .then(function (r) {
-        return r.json();
+  const scoreForm = document.getElementById("score-form");
+  const scoreEntryForm = document.getElementById("score-entry-form");
+  const scoreInitialsInput = document.getElementById("score-initials");
+
+  function showScoreForm() {
+    if (!scoreForm) return;
+    scoreForm.classList.remove("hidden");
+    if (scoreInitialsInput) {
+      scoreInitialsInput.value = "";
+      scoreInitialsInput.focus();
+    }
+  }
+
+  function hideScoreForm() {
+    if (!scoreForm) return;
+    scoreForm.classList.add("hidden");
+  }
+
+  if (scoreEntryForm) {
+    scoreEntryForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const initials = (scoreInitialsInput.value || "").trim().toUpperCase();
+      if (!/^[A-Z0-9]{3}$/.test(initials)) return;
+      fetch("/game/score", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initials: initials, score: score }),
       })
-      .then(function (data) {
-        if (data.leaderboard) renderLeaderboard(data.leaderboard);
-      })
-      .catch(function () {});
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (data.leaderboard) renderLeaderboard(data.leaderboard);
+          hideScoreForm();
+        })
+        .catch(function () {});
+    });
   }
 
   function jump() {
@@ -186,7 +208,7 @@
     draw();
     if (gameOver && !scorePrompted) {
       scorePrompted = true;
-      promptForLeaderboard(score);
+      showScoreForm();
     }
     rafId = requestAnimationFrame(loop);
   }
@@ -205,6 +227,7 @@
   }
 
   document.addEventListener("keydown", function (e) {
+    if (document.activeElement === scoreInitialsInput) return;
     if (e.code === "Space" || e.code === "ArrowUp") {
       e.preventDefault();
       jump();

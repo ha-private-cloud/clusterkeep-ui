@@ -19,6 +19,30 @@
     Press Space, ↑, or tap the canvas to jump.
   </p>
 
+  <div id="score-form" class="hidden w-full max-w-lg mb-8">
+    <p class="text-sm text-stone-600 dark:text-stone-400">
+      Game over! Save your score to the leaderboard:
+    </p>
+    <form id="score-entry-form" class="flex items-center justify-center gap-2 mt-3">
+      <input
+        type="text"
+        id="score-initials"
+        maxlength="3"
+        pattern="[A-Za-z0-9]{3}"
+        placeholder="ABC"
+        required
+        autocomplete="off"
+        class="w-20 px-3 py-2 text-center text-lg font-mono uppercase rounded-lg border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700"
+      />
+      <button
+        type="submit"
+        class="inline-flex items-center justify-center px-4 py-2 text-sm font-semibold text-white bg-amber-700 rounded-lg hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-700 dark:focus-visible:ring-offset-stone-950"
+      >
+        Save Score
+      </button>
+    </form>
+  </div>
+
   <div class="w-full max-w-lg mb-10">
     <h2
       class="font-display text-xl font-bold text-stone-900 dark:text-stone-50 mb-3"
