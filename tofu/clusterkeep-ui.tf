@@ -38,6 +38,18 @@ locals {
   )
 }
 
+resource "kubernetes_secret" "clusterkeep_ui_invite_code" {
+  metadata {
+    name      = "clusterkeep-ui-invite-code"
+    namespace = data.kubernetes_namespace.clusterkeep_ui.metadata[0].name
+  }
+
+  data = {
+    INVITE_CODE                 = var.invite_code
+    AUTH_API_REGISTRATION_TOKEN = var.registration_token
+  }
+}
+
 resource "helm_release" "clusterkeep_ui" {
   name      = "clusterkeep-ui"
   chart     = "${path.module}/../../charts/clusterkeep-ui"
@@ -58,6 +70,29 @@ resource "helm_release" "clusterkeep_ui" {
       imagePullSecrets = var.image_pull_secret_name != "" ? [
         { name = var.image_pull_secret_name }
       ] : []
+      env = [
+        { name = "AUTH_API_BASE_URL", value = var.auth_api_base_url },
+        { name = "AUTH_API_INTERNAL_URL", value = var.auth_api_internal_url },
+        { name = "STORAGE_UI_URL", value = var.storage_ui_base_url },
+        {
+          name = "INVITE_CODE"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.clusterkeep_ui_invite_code.metadata[0].name
+              key  = "INVITE_CODE"
+            }
+          }
+        },
+        {
+          name = "AUTH_API_REGISTRATION_TOKEN"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.clusterkeep_ui_invite_code.metadata[0].name
+              key  = "AUTH_API_REGISTRATION_TOKEN"
+            }
+          }
+        },
+      ]
     })
   ]
 }
