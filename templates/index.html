@@ -18,13 +18,22 @@
     Coming soon. Track progress on GitHub.
   </p>
 
-  <a
-    href="https://github.com/ha-private-cloud"
-    target="_blank"
-    rel="noopener noreferrer"
-    class="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-white bg-amber-700 rounded-lg hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-700 dark:focus-visible:ring-offset-stone-950"
-  >
-    View on GitHub
-  </a>
+  <div class="flex flex-col sm:flex-row items-center gap-4">
+    <a
+      href="https://github.com/ha-private-cloud"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-stone-900 dark:text-stone-100 border border-stone-300 dark:border-stone-700 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-700 dark:focus-visible:ring-offset-stone-950"
+    >
+      View on GitHub
+    </a>
+
+    <a
+      href="{{ url_for('game') }}"
+      class="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-stone-900 dark:text-stone-100 border border-stone-300 dark:border-stone-700 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-700 dark:focus-visible:ring-offset-stone-950"
+    >
+      Play Game
+    </a>
+  </div>
 </div>
 {% endblock %}
