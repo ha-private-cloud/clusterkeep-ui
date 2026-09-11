@@ -9,7 +9,7 @@ from flask import Flask, redirect, render_template, request
 
 app = Flask(__name__)
 
-INITIALS_RE = re.compile(r"^[A-Z]{3}$")
+INITIALS_RE = re.compile(r"^[A-Z0-9]{3}$")
 LEADERBOARD_SIZE = 10
 
 APP_TITLE = os.environ.get("APP_TITLE", "ClusterKeep")

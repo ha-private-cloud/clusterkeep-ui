@@ -263,8 +263,13 @@ def test_leaderboard_is_ordered_highest_first_and_capped(client):
     assert scores[0] == 999
 
 def test_score_submission_rejects_bad_initials(client):
-    response = client.post("/game/score", json={"initials": "ab1", "score": 5})
+    response = client.post("/game/score", json={"initials": "a!1", "score": 5})
     assert response.status_code == 400
+
+def test_score_submission_accepts_alphanumeric_initials(client):
+    response = client.post("/game/score", json={"initials": "a1b", "score": 5})
+    assert response.status_code == 201
+    assert response.get_json()["leaderboard"][0]["initials"] == "A1B"
 
 def test_score_submission_rejects_non_integer_score(client):
     response = client.post("/game/score", json={"initials": "abc", "score": "5"})
