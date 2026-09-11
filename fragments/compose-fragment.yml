@@ -14,6 +14,7 @@ services:
       STORAGE_UI_URL: http://localhost:9081
       INVITE_CODE: c1u513r01K3Ep
       AUTH_API_REGISTRATION_TOKEN: dev-registration-token
+      LEADERBOARD_DB_PATH: /app/leaderboard.db
     depends_on:
       - auth-api
     volumes:

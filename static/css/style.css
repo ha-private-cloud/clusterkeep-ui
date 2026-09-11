@@ -789,6 +789,10 @@ body:is(.dark)::selection {
   margin-bottom: 2.5rem;
 }
 
+.mb-3 {
+  margin-bottom: 0.75rem;
+}
+
 .mb-4 {
   margin-bottom: 1rem;
 }
@@ -917,6 +921,17 @@ body:is(.dark)::selection {
   gap: 1.5rem;
 }
 
+.divide-y > :not([hidden]) ~ :not([hidden]) {
+  --tw-divide-y-reverse: 0;
+  border-top-width: calc(1px * calc(1 - var(--tw-divide-y-reverse)));
+  border-bottom-width: calc(1px * var(--tw-divide-y-reverse));
+}
+
+.divide-stone-200 > :not([hidden]) ~ :not([hidden]) {
+  --tw-divide-opacity: 1;
+  border-color: rgb(231 229 228 / var(--tw-divide-opacity, 1));
+}
+
 .rounded-lg {
   border-radius: 0.5rem;
 }
@@ -985,6 +1000,11 @@ body:is(.dark)::selection {
   background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
 }
 
+.px-1 {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
 .px-4 {
   padding-left: 1rem;
   padding-right: 1rem;
@@ -998,6 +1018,11 @@ body:is(.dark)::selection {
 .py-16 {
   padding-top: 4rem;
   padding-bottom: 4rem;
+}
+
+.py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 .py-3 {
@@ -1093,6 +1118,11 @@ body:is(.dark)::selection {
 .text-stone-600 {
   --tw-text-opacity: 1;
   color: rgb(87 83 78 / var(--tw-text-opacity, 1));
+}
+
+.text-stone-700 {
+  --tw-text-opacity: 1;
+  color: rgb(68 64 60 / var(--tw-text-opacity, 1));
 }
 
 .text-stone-900 {
@@ -1203,6 +1233,11 @@ body:is(.dark)::selection {
     display: none;
   }
 
+  .dark\:divide-stone-800:not(.light *):not(.light) > :not([hidden]) ~ :not([hidden]) {
+    --tw-divide-opacity: 1;
+    border-color: rgb(41 37 36 / var(--tw-divide-opacity, 1));
+  }
+
   .dark\:border-red-900:not(.light *):not(.light) {
     --tw-border-opacity: 1;
     border-color: rgb(127 29 29 / var(--tw-border-opacity, 1));
@@ -1285,6 +1320,11 @@ body:is(.dark)::selection {
   display: none;
 }
 
+.dark\:divide-stone-800:is(.dark *) > :not([hidden]) ~ :not([hidden]) {
+  --tw-divide-opacity: 1;
+  border-color: rgb(41 37 36 / var(--tw-divide-opacity, 1));
+}
+
 .dark\:border-red-900:is(.dark *) {
   --tw-border-opacity: 1;
   border-color: rgb(127 29 29 / var(--tw-border-opacity, 1));
@@ -1364,6 +1404,11 @@ body:is(.dark)::selection {
 
 .dark\:hidden:is(.dark) {
   display: none;
+}
+
+.dark\:divide-stone-800:is(.dark) > :not([hidden]) ~ :not([hidden]) {
+  --tw-divide-opacity: 1;
+  border-color: rgb(41 37 36 / var(--tw-divide-opacity, 1));
 }
 
 .dark\:border-red-900:is(.dark) {
