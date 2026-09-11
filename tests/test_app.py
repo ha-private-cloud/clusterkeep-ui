@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 import pytest
+import responses as responses_lib
 
 from app import app
 
@@ -191,3 +192,72 @@ def test_headlamp_button_absent_when_not_configured(
     body = client.get("/").get_data(as_text=True)
     assert "Log in to Headlamp" not in body
     assert headlamp_login_href(body) is None
+
+def test_header_links_to_join(client):
+    body = client.get("/").get_data(as_text=True)
+    assert 'href="/join"' in body
+
+def test_join_page_renders_invite_and_account_form_and_login_link(client):
+    body = client.get("/join").get_data(as_text=True)
+    assert 'name="invite_code"' in body
+    assert 'name="username"' in body
+    assert 'name="password"' in body
+    assert (
+        "https://auth-dev.clusterkeep.dev.net/login"
+        "?next=https%3A%2F%2Fstorage-dev.clusterkeep.dev.net"
+    ) in body
+
+JOIN_FORM = {
+    "invite_code": "c1u513r01K3Ep",
+    "username": "newuser",
+    "password": "a-long-enough-password",
+    "password_confirm": "a-long-enough-password",
+}
+
+def test_correct_invite_code_registers_via_auth_api_and_relays_the_session_cookie(client, monkeypatch):
+    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+    monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            "https://auth-dev.clusterkeep.dev.net/api/v1/register",
+            status=201,
+            headers={"Set-Cookie": "ck_sso=opaque-token; Domain=.clusterkeep.dev.net; HttpOnly"},
+        )
+        response = client.post("/join", data=JOIN_FORM, follow_redirects=False)
+    assert response.status_code == 302
+    assert response.headers["Location"] == "https://storage-dev.clusterkeep.dev.net"
+    assert "ck_sso" in response.headers.get("Set-Cookie", "")
+
+def test_wrong_invite_code_is_rejected_without_calling_auth_api(client, monkeypatch):
+    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+    with responses_lib.RequestsMock(assert_all_requests_are_fired=False) as rsps:
+        response = client.post("/join", data={**JOIN_FORM, "invite_code": "wrong-code"})
+        assert len(rsps.calls) == 0
+    assert response.status_code == 200
+    assert "is not valid" in response.get_data(as_text=True)
+
+def test_invite_code_check_fails_closed_when_unconfigured(client, monkeypatch):
+    monkeypatch.setitem(app.config, "INVITE_CODE", "")
+    response = client.post("/join", data={**JOIN_FORM, "invite_code": ""})
+    assert response.status_code == 200
+    assert "is not valid" in response.get_data(as_text=True)
+
+def test_mismatched_passwords_are_rejected(client, monkeypatch):
+    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+    response = client.post("/join", data={**JOIN_FORM, "password_confirm": "something-else"})
+    assert response.status_code == 200
+    assert "do not match" in response.get_data(as_text=True)
+
+def test_taken_username_shows_auth_apis_error(client, monkeypatch):
+    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+    monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            "https://auth-dev.clusterkeep.dev.net/api/v1/register",
+            status=409,
+        )
+        response = client.post("/join", data=JOIN_FORM)
+    assert response.status_code == 200
+    assert "already taken" in response.get_data(as_text=True)

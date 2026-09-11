@@ -5,7 +5,7 @@ variable "kubeconfig_path" {
 }
 
 variable "namespace" {
-  description = "Namespace to install clusterkeep-ui into. Must already exist , created by cluster-config, not here (see its clusterkeep-ui-namespaces.tf)."
+  description = "Namespace to install clusterkeep-ui into. Must already exist."
   type        = string
   default     = "clusterkeep-dev-pub"
 }
@@ -17,12 +17,12 @@ variable "image_repository" {
 }
 
 variable "image_tag" {
-  description = "For dev/preview (image_tag_prefix != \"\"): fallback tag, used only if no pushed tag matches image_tag_prefix yet (e.g. a brand-new environment) , tofu normally resolves the tag itself, see the external data source in clusterkeep-ui.tf. For prd (image_tag_prefix == \"\"): authoritative, used directly on every apply , release tags are pinned via release.yml's `cluster-cli build --tag`, not auto-picked, so keep this in sync with the current release tag before applying against prd."
+  description = "For dev/preview (image_tag_prefix != \"\"): fallback tag, used only if no pushed tag matches image_tag_prefix yet. For prd (image_tag_prefix == \"\"): authoritative on every apply - keep it in sync with the current release tag."
   type        = string
 }
 
 variable "image_tag_prefix" {
-  description = "Which branch's tag channel this environment tracks , \"DEV-\" or \"PREVIEW-\" (cluster-cli's branch-based tag prefixes, see ../../cluster-cli/README.md). \"\" (prd) disables the auto-latest-tag lookup entirely , release tags are vX.Y.Z, not plain-numeric, so var.image_tag is used directly instead (see clusterkeep-ui.tf's locals)."
+  description = "Which branch's tag channel this environment tracks: \"DEV-\" or \"PREVIEW-\". \"\" (prd) disables the auto-latest-tag lookup, since release tags are vX.Y.Z, not plain-numeric."
   type        = string
   default     = "DEV-"
 }
@@ -34,25 +34,43 @@ variable "ingress_hostname" {
 }
 
 variable "ingress_enabled" {
-  description = "Whether to create a LAN Ingress for this instance. Disable for the prd instance , it's reached only via the Cloudflare Tunnel hitting its Service directly, and an Ingress would collide on ingress_hostname with the dev instance's."
+  description = "Whether to create a LAN Ingress for this instance. Disable for prd - it's reached only via the Cloudflare Tunnel, and an Ingress would collide with the dev instance's hostname."
   type        = bool
   default     = true
 }
 
 variable "auth_api_base_url" {
-  description = "Base URL of the auth-api OIDC identity provider this environment logs in against. The UI only links out to its /login endpoint with headlamp_url as the next parameter , it does no auth itself. Set to \"\" to hide the login button entirely."
+  description = "Base URL of the auth-api OIDC identity provider this environment logs in against. Set to \"\" to hide the login button."
   type        = string
   default     = "https://auth-dev.clusterkeep.dev.net"
 }
 
 variable "headlamp_url" {
-  description = "URL auth-api sends the browser to once the SSO session is established , the Headlamp instance this environment's login button targets. Set to \"\" to hide the login button entirely."
+  description = "Headlamp URL this environment's login button targets. Set to \"\" to hide the login button."
   type        = string
   default     = "https://headlamp.clusterkeep.dev.net"
 }
 
+variable "storage_ui_base_url" {
+  description = "storage-ui URL a user is sent to after logging in or registering via the /join invite gate."
+  type        = string
+  default     = "https://storage-dev.clusterkeep.dev.net"
+}
+
+variable "invite_code" {
+  description = "Invite code required to create an account via the /join page."
+  type        = string
+  sensitive   = true
+}
+
+variable "registration_token" {
+  description = "Shared bearer token /join presents to auth-api's POST /api/v1/register. Must match auth-api's registration_token exactly."
+  type        = string
+  sensitive   = true
+}
+
 variable "image_pull_secret_name" {
-  description = "Name of the imagePullSecret to use, if the Nexus docker-hosted repo requires auth. Created in cluster-config (see its clusterkeep-ui-namespaces.tf), not here , leave blank if the repo allows anonymous pulls."
+  description = "Name of the imagePullSecret to use, if the Nexus docker-hosted repo requires auth. Leave blank if the repo allows anonymous pulls."
   type        = string
   default     = ""
 }

@@ -9,6 +9,12 @@ services:
       - "127.0.0.1:9080:5000"
     environment:
       APP_TITLE: ${APP_TITLE:-ClusterKeep}
+      AUTH_API_BASE_URL: http://localhost:9082
+      STORAGE_UI_URL: http://localhost:9081
+      INVITE_CODE: c1u513r01K3Ep
+      AUTH_API_REGISTRATION_TOKEN: dev-registration-token
+    depends_on:
+      - auth-api
     volumes:
       - ./clusterkeep-ui/app.py:/app/app.py:ro
       - ./clusterkeep-ui/templates:/app/templates:ro

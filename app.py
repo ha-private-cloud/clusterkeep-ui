@@ -2,7 +2,8 @@ import os
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlsplit
 
-from flask import Flask, render_template
+import requests
+from flask import Flask, redirect, render_template, request
 
 app = Flask(__name__)
 
@@ -14,6 +15,11 @@ app.config["AUTH_API_BASE_URL"] = os.environ.get(
 app.config["HEADLAMP_URL"] = os.environ.get(
     "HEADLAMP_URL", "https://headlamp.clusterkeep.dev.net"
 ).strip()
+app.config["STORAGE_UI_URL"] = os.environ.get(
+    "STORAGE_UI_URL", "https://storage-dev.clusterkeep.dev.net"
+).strip()
+app.config["INVITE_CODE"] = os.environ.get("INVITE_CODE", "").strip()
+app.config["AUTH_API_REGISTRATION_TOKEN"] = os.environ.get("AUTH_API_REGISTRATION_TOKEN", "").strip()
 
 CONTENT_SECURITY_POLICY = "; ".join(
     [
@@ -60,6 +66,48 @@ def headlamp_login_url():
     return f"{auth_api_base_url.rstrip('/')}/login?{query}"
 
 
+def storage_login_url():
+    auth_api_base_url = app.config["AUTH_API_BASE_URL"]
+    storage_ui_url = app.config["STORAGE_UI_URL"]
+    if not (auth_api_base_url and storage_ui_url):
+        return None
+    if not (_is_http_url(auth_api_base_url) and _is_http_url(storage_ui_url)):
+        return None
+    query = urlencode({"next": storage_ui_url})
+    return f"{auth_api_base_url.rstrip('/')}/login?{query}"
+
+
+def _register_with_auth_api(username, password):
+    """Server-to-server, gated by a bearer token only this backend holds -- the invite
+    code alone is not enough to reach auth-api's registration endpoint."""
+    auth_api_base_url = app.config["AUTH_API_BASE_URL"]
+    registration_token = app.config["AUTH_API_REGISTRATION_TOKEN"]
+    if not (auth_api_base_url and registration_token):
+        return None, "Account creation is not configured."
+
+    try:
+        upstream = requests.post(
+            f"{auth_api_base_url.rstrip('/')}/api/v1/register",
+            json={"username": username, "password": password},
+            headers={"Authorization": f"Bearer {registration_token}"},
+            timeout=5,
+        )
+    except requests.RequestException:
+        return None, "Could not reach the account service. Try again shortly."
+
+    if upstream.status_code == 201:
+        response = redirect(app.config["STORAGE_UI_URL"])
+        cookie_header = upstream.headers.get("Set-Cookie")
+        if cookie_header:
+            response.headers["Set-Cookie"] = cookie_header
+        return response, None
+    if upstream.status_code == 409:
+        return None, "That username is already taken."
+    if upstream.status_code == 422:
+        return None, "Password must be at least 12 characters."
+    return None, "Could not create that account."
+
+
 @app.context_processor
 def inject_globals():
     return {
@@ -77,6 +125,32 @@ def index():
 @app.get("/game")
 def game():
     return render_template("game.html")
+
+
+@app.route("/join", methods=["GET", "POST"])
+def join():
+    error = None
+    if request.method == "POST":
+        submitted_code = request.form.get("invite_code", "")
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        password_confirm = request.form.get("password_confirm", "")
+        expected = app.config["INVITE_CODE"]
+
+        if not (expected and submitted_code == expected):
+            error = "That invite code is not valid."
+        elif password != password_confirm:
+            error = "Passwords do not match."
+        else:
+            response, error = _register_with_auth_api(username, password)
+            if response is not None:
+                return response
+
+    return render_template(
+        "join.html",
+        error=error,
+        storage_login_url=storage_login_url(),
+    )
 
 
 @app.get("/healthz")
