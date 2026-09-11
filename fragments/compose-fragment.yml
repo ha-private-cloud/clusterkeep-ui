@@ -10,6 +10,7 @@ services:
     environment:
       APP_TITLE: ${APP_TITLE:-ClusterKeep}
       AUTH_API_BASE_URL: http://localhost:9082
+      AUTH_API_INTERNAL_URL: http://auth-api:8000
       STORAGE_UI_URL: http://localhost:9081
       INVITE_CODE: c1u513r01K3Ep
       AUTH_API_REGISTRATION_TOKEN: dev-registration-token

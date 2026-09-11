@@ -222,7 +222,7 @@ def test_correct_invite_code_registers_via_auth_api_and_relays_the_session_cooki
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "https://auth-dev.clusterkeep.dev.net/api/v1/register",
+            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
             status=201,
             headers={"Set-Cookie": "ck_sso=opaque-token; Domain=.clusterkeep.dev.net; HttpOnly"},
         )
@@ -265,7 +265,7 @@ def test_taken_username_shows_auth_apis_error(client, monkeypatch):
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "https://auth-dev.clusterkeep.dev.net/api/v1/register",
+            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
             status=409,
         )
         response = client.post("/join", data=JOIN_FORM)

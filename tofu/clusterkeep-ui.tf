@@ -72,6 +72,7 @@ resource "helm_release" "clusterkeep_ui" {
       ] : []
       env = [
         { name = "AUTH_API_BASE_URL", value = var.auth_api_base_url },
+        { name = "AUTH_API_INTERNAL_URL", value = var.auth_api_internal_url },
         { name = "HEADLAMP_URL", value = var.headlamp_url },
         { name = "STORAGE_UI_URL", value = var.storage_ui_base_url },
         {

@@ -12,6 +12,11 @@ APP_TITLE = os.environ.get("APP_TITLE", "ClusterKeep")
 app.config["AUTH_API_BASE_URL"] = os.environ.get(
     "AUTH_API_BASE_URL", "https://auth-dev.clusterkeep.dev.net"
 ).strip()
+# The public hostname above only resolves for browsers; this backend's own registration
+# call needs the in-cluster Service DNS name (or the dev-env's docker-compose service name).
+app.config["AUTH_API_INTERNAL_URL"] = os.environ.get(
+    "AUTH_API_INTERNAL_URL", "http://auth-api.clusterkeep-dev-priv.svc.cluster.local"
+).strip()
 app.config["HEADLAMP_URL"] = os.environ.get(
     "HEADLAMP_URL", "https://headlamp.clusterkeep.dev.net"
 ).strip()
@@ -80,14 +85,14 @@ def storage_login_url():
 def _register_with_auth_api(username, password, email):
     """Server-to-server, gated by a bearer token only this backend holds -- the invite
     code alone is not enough to reach auth-api's registration endpoint."""
-    auth_api_base_url = app.config["AUTH_API_BASE_URL"]
+    auth_api_internal_url = app.config["AUTH_API_INTERNAL_URL"]
     registration_token = app.config["AUTH_API_REGISTRATION_TOKEN"]
-    if not (auth_api_base_url and registration_token):
+    if not (auth_api_internal_url and registration_token):
         return None, "Account creation is not configured."
 
     try:
         upstream = requests.post(
-            f"{auth_api_base_url.rstrip('/')}/api/v1/register",
+            f"{auth_api_internal_url.rstrip('/')}/api/v1/register",
             json={"username": username, "password": password, "email": email},
             headers={"Authorization": f"Bearer {registration_token}"},
             timeout=5,
