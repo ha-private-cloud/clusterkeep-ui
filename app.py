@@ -1,4 +1,6 @@
 import os
+import re
+import sqlite3
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlsplit
 
@@ -6,6 +8,9 @@ import requests
 from flask import Flask, redirect, render_template, request
 
 app = Flask(__name__)
+
+INITIALS_RE = re.compile(r"^[A-Z]{3}$")
+LEADERBOARD_SIZE = 10
 
 APP_TITLE = os.environ.get("APP_TITLE", "ClusterKeep")
 
@@ -25,6 +30,7 @@ app.config["STORAGE_UI_URL"] = os.environ.get(
 ).strip()
 app.config["INVITE_CODE"] = os.environ.get("INVITE_CODE", "").strip()
 app.config["AUTH_API_REGISTRATION_TOKEN"] = os.environ.get("AUTH_API_REGISTRATION_TOKEN", "").strip()
+app.config["LEADERBOARD_DB_PATH"] = os.environ.get("LEADERBOARD_DB_PATH", "/data/leaderboard.db")
 
 CONTENT_SECURITY_POLICY = "; ".join(
     [
@@ -122,6 +128,37 @@ def _describe_validation_error(upstream):
     return " ".join(messages) if messages else "Check your account details and try again."
 
 
+def _leaderboard_db():
+    conn = sqlite3.connect(app.config["LEADERBOARD_DB_PATH"])
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS leaderboard ("
+        "initials TEXT NOT NULL, score INTEGER NOT NULL, "
+        "created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)"
+    )
+    return conn
+
+
+def top_scores():
+    conn = _leaderboard_db()
+    try:
+        rows = conn.execute(
+            "SELECT initials, score FROM leaderboard ORDER BY score DESC, created_at ASC LIMIT ?",
+            (LEADERBOARD_SIZE,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [{"initials": initials, "score": score} for initials, score in rows]
+
+
+def record_score(initials, score):
+    conn = _leaderboard_db()
+    try:
+        conn.execute("INSERT INTO leaderboard (initials, score) VALUES (?, ?)", (initials, score))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 @app.context_processor
 def inject_globals():
     return {
@@ -138,7 +175,22 @@ def index():
 
 @app.get("/game")
 def game():
-    return render_template("game.html")
+    return render_template("game.html", leaderboard=top_scores())
+
+
+@app.post("/game/score")
+def submit_game_score():
+    body = request.get_json(silent=True) or {}
+    initials = str(body.get("initials", "")).strip().upper()
+    score = body.get("score")
+
+    if not INITIALS_RE.match(initials):
+        return {"error": "Initials must be exactly 3 letters."}, 400
+    if not isinstance(score, int) or isinstance(score, bool) or not (0 <= score <= 1_000_000):
+        return {"error": "Invalid score."}, 400
+
+    record_score(initials, score)
+    return {"leaderboard": top_scores()}, 201
 
 
 @app.route("/join", methods=["GET", "POST"])

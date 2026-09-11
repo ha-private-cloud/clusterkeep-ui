@@ -11,8 +11,9 @@ TEMPLATES = REPO_ROOT / "templates"
 STATIC = REPO_ROOT / "static"
 
 @pytest.fixture
-def client():
+def client(tmp_path, monkeypatch):
     app.config["TESTING"] = True
+    monkeypatch.setitem(app.config, "LEADERBOARD_DB_PATH", str(tmp_path / "leaderboard.db"))
     with app.test_client() as c:
         yield c
 
@@ -285,3 +286,33 @@ def test_invalid_password_shows_auth_apis_specific_error(client, monkeypatch):
         response = client.post("/join", data=JOIN_FORM)
     assert response.status_code == 200
     assert "String should have at least 12 characters" in response.get_data(as_text=True)
+
+def test_game_page_renders_empty_leaderboard(client):
+    body = client.get("/game").get_data(as_text=True)
+    assert "No scores yet" in body
+
+def test_submitting_a_score_adds_it_to_the_leaderboard(client):
+    response = client.post("/game/score", json={"initials": "abc", "score": 42})
+    assert response.status_code == 201
+    assert response.get_json()["leaderboard"][0] == {"initials": "ABC", "score": 42}
+
+def test_leaderboard_is_ordered_highest_first_and_capped(client):
+    for i in range(12):
+        client.post("/game/score", json={"initials": "AAA", "score": i})
+    response = client.post("/game/score", json={"initials": "ZZZ", "score": 999})
+    scores = [entry["score"] for entry in response.get_json()["leaderboard"]]
+    assert scores == sorted(scores, reverse=True)
+    assert len(scores) == 10
+    assert scores[0] == 999
+
+def test_score_submission_rejects_bad_initials(client):
+    response = client.post("/game/score", json={"initials": "ab1", "score": 5})
+    assert response.status_code == 400
+
+def test_score_submission_rejects_non_integer_score(client):
+    response = client.post("/game/score", json={"initials": "abc", "score": "5"})
+    assert response.status_code == 400
+
+def test_score_submission_rejects_out_of_range_score(client):
+    response = client.post("/game/score", json={"initials": "abc", "score": 5_000_000})
+    assert response.status_code == 400
