@@ -53,15 +53,15 @@
       <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="min-h-16 py-3 sm:py-0 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           <a
-            class="flex items-center gap-3 text-stone-900 dark:text-stone-50"
+            class="flex items-center gap-3 min-w-0 text-stone-900 dark:text-stone-50"
             href="{{ url_for('index') }}"
           >
             <span
-              class="flex items-center justify-center w-9 h-9 rounded-md bg-stone-800 text-white"
+              class="flex items-center justify-center w-9 h-9 shrink-0 rounded-md bg-stone-800 text-white"
             >
               {% include "partials/logo.html" %}
             </span>
-            <span class="font-display text-xl font-bold tracking-wide">{{ title }}</span>
+            <span class="font-display text-xl font-bold tracking-wide truncate">{{ title }}</span>
           </a>
 
           <button
@@ -70,7 +70,7 @@
             aria-controls="nav-links"
             aria-expanded="false"
             aria-label="Open menu"
-            class="sm:hidden text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-950"
+            class="sm:hidden shrink-0 text-stone-600 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-950"
           >
             <svg
               class="w-6 h-6"

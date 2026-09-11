@@ -881,6 +881,10 @@ body:is(.dark)::selection {
   width: 100%;
 }
 
+.min-w-0 {
+  min-width: 0px;
+}
+
 .max-w-3xl {
   max-width: 48rem;
 }
@@ -903,6 +907,10 @@ body:is(.dark)::selection {
 
 .flex-1 {
   flex: 1 1 0%;
+}
+
+.shrink-0 {
+  flex-shrink: 0;
 }
 
 .flex-col {
@@ -955,6 +963,12 @@ body:is(.dark)::selection {
 .divide-stone-200 > :not([hidden]) ~ :not([hidden]) {
   --tw-divide-opacity: 1;
   border-color: rgb(231 229 228 / var(--tw-divide-opacity, 1));
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rounded-lg {
