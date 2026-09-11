@@ -19,6 +19,27 @@
     Press Space, ↑, or tap the canvas to jump.
   </p>
 
+  <div class="w-full max-w-lg mb-10">
+    <h2
+      class="font-display text-xl font-bold text-stone-900 dark:text-stone-50 mb-3"
+    >
+      Leaderboard
+    </h2>
+    <ol
+      id="leaderboard-list"
+      class="text-sm text-stone-700 dark:text-stone-300 divide-y divide-stone-200 dark:divide-stone-800 border-t border-b border-stone-200 dark:border-stone-800"
+    >
+      {% for entry in leaderboard %}
+      <li class="flex justify-between px-1 py-2">
+        <span>{{ loop.index }}. {{ entry.initials }}</span>
+        <span>{{ entry.score }}</span>
+      </li>
+      {% else %}
+      <li class="px-1 py-2 text-stone-500">No scores yet — be the first!</li>
+      {% endfor %}
+    </ol>
+  </div>
+
   <a
     href="{{ url_for('index') }}"
     class="inline-flex items-center justify-center px-6 py-3 text-base font-semibold text-stone-900 dark:text-stone-100 border border-stone-300 dark:border-stone-700 rounded-lg hover:bg-stone-100 dark:hover:bg-stone-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-700 dark:focus-visible:ring-offset-stone-950"

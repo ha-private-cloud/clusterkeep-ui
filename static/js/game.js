@@ -26,7 +26,7 @@
   } catch (e) {}
 
   let rafId = null;
-  let player, obstacles, speed, spawnTimer, spawnInterval, frame, score, gameOver;
+  let player, obstacles, speed, spawnTimer, spawnInterval, frame, score, gameOver, scorePrompted;
 
   function resetState() {
     player = { y: GROUND_Y - PLAYER_H, vy: 0, jumping: false };
@@ -37,6 +37,49 @@
     frame = 0;
     score = 0;
     gameOver = false;
+    scorePrompted = false;
+  }
+
+  function renderLeaderboard(entries) {
+    const list = document.getElementById("leaderboard-list");
+    if (!list) return;
+    list.innerHTML = "";
+    if (!entries || entries.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "px-1 py-2 text-stone-500";
+      empty.textContent = "No scores yet — be the first!";
+      list.appendChild(empty);
+      return;
+    }
+    entries.forEach(function (entry, i) {
+      const li = document.createElement("li");
+      li.className = "flex justify-between px-1 py-2";
+      const rank = document.createElement("span");
+      rank.textContent = (i + 1) + ". " + entry.initials;
+      const points = document.createElement("span");
+      points.textContent = String(entry.score);
+      li.appendChild(rank);
+      li.appendChild(points);
+      list.appendChild(li);
+    });
+  }
+
+  function promptForLeaderboard(finalScore) {
+    const raw = window.prompt("Game over! Enter 3 letters for the leaderboard:", "");
+    const initials = (raw || "").trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(initials)) return;
+    fetch("/game/score", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ initials: initials, score: finalScore }),
+    })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (data.leaderboard) renderLeaderboard(data.leaderboard);
+      })
+      .catch(function () {});
   }
 
   function jump() {
@@ -141,6 +184,10 @@
   function loop() {
     if (!gameOver) update();
     draw();
+    if (gameOver && !scorePrompted) {
+      scorePrompted = true;
+      promptForLeaderboard(score);
+    }
     rafId = requestAnimationFrame(loop);
   }
 
