@@ -271,3 +271,17 @@ def test_taken_username_shows_auth_apis_error(client, monkeypatch):
         response = client.post("/join", data=JOIN_FORM)
     assert response.status_code == 200
     assert "already taken" in response.get_data(as_text=True)
+
+def test_invalid_password_shows_auth_apis_specific_error(client, monkeypatch):
+    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+    monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
+            json={"detail": [{"msg": "String should have at least 12 characters"}]},
+            status=422,
+        )
+        response = client.post("/join", data=JOIN_FORM)
+    assert response.status_code == 200
+    assert "String should have at least 12 characters" in response.get_data(as_text=True)
