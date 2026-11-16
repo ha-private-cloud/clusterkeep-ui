@@ -1,72 +1,74 @@
 # clusterkeep-ui
 
-A small Flask app that serves as the frontend for the clusterkeep service landing page, plus the OpenTofu config used to deploy it.
+The public front page of ClusterKeep. It's where people join with an invite code, log in, change their password and recover their storage, and it sends them on to their files afterwards.
 
-## Local development
+## What it does
+
+- Landing page with links to join and log in.
+- Joining checks the invite code and creates the account through auth-api.
+- Logging in sends the username and password to auth-api's internal sessions API, then sets the `ck_sso` session cookie that every ClusterKeep site uses.
+- The first log-in after storage-api is set up unlocks the user's storage and shows their recovery code once.
+- If an admin has reset someone's password, logging in asks for their recovery code so their storage can be unlocked again.
+- Logging out locks storage and ends the session.
+- Unknown pages show the same 404 page as the other sites.
+
+auth-api never serves any of these pages itself. Everything the browser sees comes from here, and auth-api only answers clusterkeep-ui's backend over the cluster network.
+
+## Endpoints
+
+| Method | Path | What it does |
+|---|---|---|
+| GET | `/` | Landing page |
+| GET, POST | `/join` | Create an account with an invite code |
+| GET | `/login` | Login form. `next` sets where to go afterwards |
+| POST | `/login` | Log in through auth-api, unlock storage and continue |
+| POST | `/login/change-password` | Choose a new password when auth-api asks for one |
+| POST | `/login/recover` | Unlock storage with the recovery code after a password reset |
+| GET, POST | `/logout` | Lock storage, end the session and clear the cookie |
+| GET | `/healthz` | Kubernetes health check |
+
+After logging in or joining, the page shows a short "Signing you in" page that moves on by itself instead of redirecting straight to another site. The content security policy uses `form-action 'self'`, which also blocks redirects to other sites after a form is posted.
+
+## Technologies
+
+- Python 3.13 and Flask, served by gunicorn
+- Jinja2 templates styled with Tailwind CSS, built ahead of time so nothing loads from a CDN
+- Small vanilla JavaScript files, no frameworks
+- requests for the server-to-server calls to auth-api and storage-api
+- pytest with the responses library for the tests
+- uv for dependencies, Docker for the image, Helm and OpenTofu for deployment
+
+## Configuration
+
+| Variable | What it's for |
+|---|---|
+| `AUTH_API_INTERNAL_URL` | auth-api's address inside the cluster |
+| `AUTH_API_REGISTRATION_TOKEN` | Token for auth-api's registration and sessions APIs |
+| `INVITE_CODE` | Code people need to join |
+| `STORAGE_UI_URL` | Where people go after joining |
+| `STORAGE_API_URL` | storage-api's address inside the cluster. Leave it blank to turn storage unlocking off |
+| `STORAGE_API_TOKEN` | Service token for storage-api |
+| `APP_TITLE` | Site title, defaults to ClusterKeep |
+
+## Running locally
+
+The easiest way is [common-dev-env](https://github.com/LandRegistry/common-dev-env) with the [dev-env-config](https://github.com/ha-private-cloud/dev-env-config) repository, set up as the [organisation README](https://github.com/ha-private-cloud/.github/blob/main/profile/README.md#running-it-locally) describes. That runs it on http://localhost:9080 alongside the other services. You can also run it on its own.
 
 ```sh
 uv sync
+npm install
+npm run build:css
 uv run flask --app app run --debug
 ```
 
-The page title defaults to "ClusterKeep" and can be overridden with the `APP_TITLE` environment variable.
+Run the tests with `uv run pytest`. Rebuild the CSS after changing a template, because a test checks every class a template uses is in the built stylesheet.
 
-## Tests
+## Deployment
 
-```sh
-uv run pytest
-```
+The GitHub workflows come from the shared `pipelines` repo.
 
-## Container image
+- Pushes to `development` and `preview` build the image in the cluster through cluster-ci and deploy it to dev and preview.
+- Merges to `main` build the image without deploying it.
+- Pushing a `vX.Y.Z` tag builds the release image, and running the release workflow with that tag deploys it to production.
 
-Built and pushed to the in-cluster Nexus docker-hosted repo (see `../cluster-config`'s `nexus.tf`):
-
-```sh
-docker build -t registry.talos.lab/clusterkeep-ui:<tag> .
-docker push registry.talos.lab/clusterkeep-ui:<tag>
-```
-
-## Helm chart
-
-Lives at [`../charts/clusterkeep-ui`](../charts/clusterkeep-ui) , deliberately **outside** this (or any) git repo, so it's local-machine-only and never pushed to GitHub. A standard chart (Chart.yaml, values.yaml, templates/), installable on its own with `helm install clusterkeep-ui ../charts/clusterkeep-ui`.
-
-## Deploying
-
-`tofu/clusterkeep-ui.tf` does the initial install and owns structural changes (chart version, ingress config) via a `helm_release` pointed at `../charts/clusterkeep-ui`. The namespace itself is **not** created here , it's a cluster-wide primitive owned by `../cluster-config` (see its `clusterkeep-ui-namespaces.tf`); this repo's Tofu only looks it up by name and will fail with a clear "not found" error if it doesn't exist yet, so apply `cluster-config` first when standing up a new environment. Its Nexus pull-credentials Secret, if the registry needs auth, is created there too.
-
-Image tags are picked up automatically for dev/preview: every `tofu apply` queries Nexus's Docker Registry API (see `scripts/latest_image_tag.py`, an `external` data source , testable standalone without touching tofu at all) for the newest tag on this environment's channel and deploys that, no manual `image_tag` edit or separate CLI step needed. Which channel an environment tracks is `image_tag_prefix`:
-
-- `default` workspace (built-in tfvars) , dev channel, picks the newest tag starting with `DEV-`
-- `prv` workspace (`prv.tfvars`) , preview channel, picks the newest tag starting with `PREVIEW-`
-- `prd` workspace (`prd.tfvars`) , `image_tag_prefix = ""` disables this lookup entirely; `image_tag` is used directly instead (see "Continuous deployment" below for why)
-
-Tags in the right shape come from `cluster-cli build`, which derives them from the app repo's checked-out branch (`dev`/`preview`/`main` , see `../cluster-cli/README.md`). For dev/preview, `image_tag` is only a fallback, used if nothing on that channel has been pushed yet. For prd, `image_tag` is authoritative , keep it in sync with the current release tag if you plan to `tofu apply` against prd.
-
-All `.tf` files live under `tofu/`. Create `tofu/terraform.tfvars`:
-
-```
-kubeconfig_path = "../../proxmox-tofu/_out/kubeconfig"
-image_tag       = ""
-```
-
-If the Nexus docker-hosted repo requires auth (anonymous pulls are the default), set `clusterkeep_ui_registry_username`/`_password` in `cluster-config`'s tfvars instead , this repo's Tofu reads them from there via remote state, both to query the registry for the latest tag and (if `image_pull_secret_name = "clusterkeep-ui-registry"` is set here) to reference the imagePullSecret it creates.
-
-Run tofu:
-
-```sh
-cd tofu
-tofu init
-tofu plan
-tofu apply
-```
-
-`cluster-cli deploy --tag <tag>` still works for a one-off rollback (runs `helm upgrade` directly, bypassing tofu), but the next `tofu apply` moves the release back to whatever's newest on that environment's channel , to actually pin a rollback, push nothing newer to that channel, or lower `image_tag_prefix` to something that won't match new pushes.
-
-## Continuous deployment
-
-`.github/workflows/build.yml` runs on a self-hosted GitHub Actions runner (see `../proxmox-tofu`'s "CI bastion") on every push to `dev`, `preview`, or `main`, builds+pushes via `cluster-ci`, then:
-
-- **`dev`/`preview`** , also runs this repo's own Tofu against the matching workspace to deploy, same as before , the auto tag-selection above is what makes that deploy step pick up the image the same push just built.
-- **`main`** , build+push only, no deploy. This keeps `main` always pointing at a known-good, pushed-but-undeployed image (a plain, unprefixed timestamp tag), ready to release without redeploying anything yet.
-
-Production deploys are tag-gated: pushing a `vX.Y.Z` tag from `main` (`git tag v1.2.3 && git push origin v1.2.3`) triggers `.github/workflows/release.yml`, which builds+pushes the image with that exact tag and deploys it straight to `clusterkeep-prd-pub` via `cluster-cli build --tag`, no tofu involved. `tofu apply` against the `prd` workspace is now only for structural changes (ingress config, chart version bumps) , since prd's `image_tag_prefix` is `""`, it deploys whatever `image_tag` is set to in `prd.tfvars` rather than auto-picking a release, so keep that in sync with the current release tag before running it.
+`preview` and `main` only take changes through pull requests. The Helm chart is in `charts/clusterkeep-ui` and the OpenTofu config is in `tofu/`, with one workspace per environment. Production is public through the Cloudflare Tunnel.
