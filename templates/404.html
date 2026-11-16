@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block page_title %}Page not found · {{ title }}{% endblock %}
+
+{% block header %}
+<header
+  class="sticky top-0 z-50 w-full border-b border-stone-200 dark:border-stone-800 bg-stone-50/90 dark:bg-stone-950/90"
+>
+  <div
+    class="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between"
+  >
+    <a
+      class="flex items-center gap-3 text-stone-900 dark:text-stone-50"
+      href="{{ home_url }}"
+    >
+      <span
+        class="flex items-center justify-center w-9 h-9 rounded-md bg-stone-800 text-white"
+      >
+        {% include "partials/logo.html" %}
+      </span>
+      <span class="font-display text-xl font-bold tracking-wide">{{ title }}</span>
+    </a>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto text-center py-16">
+  <p class="font-display text-3xl md:text-4xl font-bold text-amber-700 dark:text-amber-500 tracking-tight mb-8">404</p>
+  <h1
+    class="font-display text-3xl md:text-4xl font-bold text-stone-900 dark:text-stone-50 tracking-tight leading-tight mb-8"
+  >
+    Page not found
+  </h1>
+  <p class="text-stone-600 dark:text-stone-400 mb-8">
+    The page you're looking for doesn't exist.
+  </p>
+  <a
+    href="{{ home_url }}"
+    class="text-sm font-medium text-amber-700 hover:text-amber-800 dark:text-amber-500 dark:hover:text-amber-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-700 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-950 rounded"
+  >
+    Back to ClusterKeep
+  </a>
+</div>
+{% endblock %}

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode, urlsplit
 
 import requests
-from flask import Flask, redirect, render_template, request
+from flask import Flask, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 
@@ -17,8 +17,6 @@ APP_TITLE = os.environ.get("APP_TITLE", "ClusterKeep")
 app.config["AUTH_API_BASE_URL"] = os.environ.get(
     "AUTH_API_BASE_URL", "https://auth-dev.clusterkeep.dev.net"
 ).strip()
-# The public hostname above only resolves for browsers; this backend's own registration
-# call needs the in-cluster Service DNS name (or the dev-env's docker-compose service name).
 app.config["AUTH_API_INTERNAL_URL"] = os.environ.get(
     "AUTH_API_INTERNAL_URL", "http://auth-api.clusterkeep-dev-priv.svc.cluster.local"
 ).strip()
@@ -52,6 +50,11 @@ SECURITY_HEADERS = {
 }
 
 
+@app.errorhandler(404)
+def not_found(_error):
+    return render_template("404.html", home_url=url_for("index")), 404
+
+
 @app.after_request
 def set_security_headers(response):
     for header, value in SECURITY_HEADERS.items():
@@ -75,8 +78,7 @@ def storage_login_url():
 
 
 def _register_with_auth_api(username, password, email):
-    """Server-to-server, gated by a bearer token only this backend holds -- the invite
-    code alone is not enough to reach auth-api's registration endpoint."""
+    """Registers the account with auth-api server-to-server, using this backend's bearer token."""
     auth_api_internal_url = app.config["AUTH_API_INTERNAL_URL"]
     registration_token = app.config["AUTH_API_REGISTRATION_TOKEN"]
     if not (auth_api_internal_url and registration_token):

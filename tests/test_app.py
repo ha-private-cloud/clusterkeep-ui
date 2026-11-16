@@ -127,8 +127,7 @@ def test_stylesheet_is_built_from_current_source():
 LOCAL_CLASSES = {"brand-mark", "mark-lg", "group", "antialiased"}
 
 def tailwind_selector(cls):
-    """Variants keep their prefix (`hover:bg-x` -> `.hover\\:bg-x:hover`), so do
-    not strip it. Everything outside [A-Za-z0-9_-] is backslash-escaped."""
+    """Escapes a class name the way Tailwind writes its selector, variant prefix included."""
     return "." + re.sub(r"([^A-Za-z0-9_-])", r"\\\1", cls)
 
 def tailwind_classes_used():
@@ -140,8 +139,7 @@ def tailwind_classes_used():
     return used
 
 def test_every_utility_used_by_a_template_is_in_the_build():
-    """style.css is committed and nothing rebuilds it in CI, so it can ship
-    stale after a template edit. The page still renders -- just wrong."""
+    """style.css is committed and not rebuilt in CI, so it can ship stale after a template edit."""
     css = (STATIC / "css" / "style.css").read_text()
     missing = sorted(
         cls for cls in tailwind_classes_used() if tailwind_selector(cls) not in css
@@ -278,3 +276,12 @@ def test_score_submission_rejects_non_integer_score(client):
 def test_score_submission_rejects_out_of_range_score(client):
     response = client.post("/game/score", json={"initials": "abc", "score": 5_000_000})
     assert response.status_code == 400
+
+
+def test_unknown_path_shows_the_not_found_page(client):
+    resp = client.get("/does-not-exist")
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 404
+    assert "Page not found" in body
+    assert "Back to ClusterKeep" in body
+    assert 'href="/"' in body
