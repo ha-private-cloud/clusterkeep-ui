@@ -64,7 +64,3 @@
 .mark-lg .brand-mark {
   @apply w-10 h-10;
 }
-
-#game-canvas {
-  image-rendering: pixelated;
-}
