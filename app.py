@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import requests
-from flask import Flask, redirect, render_template, request, url_for
+from flask import Flask, make_response, redirect, render_template, request, url_for
 
 app = Flask(__name__)
 
@@ -83,7 +83,7 @@ def _register_with_auth_api(username, password, email):
         return None, "Could not reach the account service. Try again shortly."
 
     if upstream.status_code == 201:
-        response = redirect(app.config["STORAGE_UI_URL"])
+        response = _continue_to(app.config["STORAGE_UI_URL"])
         cookie_header = upstream.headers.get("Set-Cookie")
         if cookie_header:
             response.headers["Set-Cookie"] = cookie_header
@@ -173,10 +173,14 @@ def _sessions_api(path, payload):
         return None
 
 
+def _continue_to(target):
+    return make_response(render_template("continue.html", target=target))
+
+
 def _signed_in(upstream):
     body = upstream.json()
     cookie = body["cookie"]
-    response = redirect(body["redirect_to"], code=303)
+    response = _continue_to(body["redirect_to"])
     response.set_cookie(
         cookie["name"],
         body["session_token"],
