@@ -905,6 +905,12 @@ body:is(.dark)::selection {
   flex-shrink: 0;
 }
 
+.select-all {
+  -webkit-user-select: all;
+     -moz-user-select: all;
+          user-select: all;
+}
+
 .flex-col {
   flex-direction: column;
 }
@@ -950,6 +956,10 @@ body:is(.dark)::selection {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.break-all {
+  word-break: break-all;
 }
 
 .rounded {
@@ -1061,6 +1071,10 @@ body:is(.dark)::selection {
   font-family: Cinzel, Georgia, serif;
 }
 
+.font-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
 .font-sans {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
 }
@@ -1122,6 +1136,10 @@ body:is(.dark)::selection {
 
 .tracking-wide {
   letter-spacing: 0.025em;
+}
+
+.tracking-wider {
+  letter-spacing: 0.05em;
 }
 
 .text-amber-700 {

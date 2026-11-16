@@ -17,12 +17,13 @@ variable "image_repository" {
 }
 
 variable "image_tag" {
-  description = "For dev/preview (image_tag_prefix != \"\"): fallback tag, used only if no pushed tag matches image_tag_prefix yet. For prd (image_tag_prefix == \"\"): authoritative on every apply - keep it in sync with the current release tag."
+  description = "For dev/preview (image_tag_prefix != \"\"): fallback tag, used only if no pushed tag matches image_tag_prefix yet. For prd (image_tag_prefix == \"\"): leave blank to deploy the highest vX.Y.Z tag on GitHub; set it (e.g. -var image_tag=v1.6.0) to pin a release or roll back."
   type        = string
+  default     = ""
 }
 
 variable "image_tag_prefix" {
-  description = "Which branch's tag channel this environment tracks: \"DEV-\" or \"PREVIEW-\". \"\" (prd) disables the auto-latest-tag lookup, since release tags are vX.Y.Z, not plain-numeric."
+  description = "Which branch's tag channel this environment tracks: \"DEV-\" or \"PREVIEW-\". \"\" (prd) deploys release tags instead - see image_tag."
   type        = string
   default     = "DEV-"
 }
@@ -68,4 +69,17 @@ variable "image_pull_secret_name" {
   description = "Name of the imagePullSecret to use, if the Nexus docker-hosted repo requires auth. Leave blank if the repo allows anonymous pulls."
   type        = string
   default     = ""
+}
+
+variable "storage_api_url" {
+  description = "In-cluster storage-api URL, used to unlock and lock each user's storage at sign-in and sign-out. Blank leaves storage off."
+  type        = string
+  default     = ""
+}
+
+variable "storage_api_token" {
+  description = "Shared bearer token for storage-api. Must match storage-api's service_token."
+  type        = string
+  default     = ""
+  sensitive   = true
 }

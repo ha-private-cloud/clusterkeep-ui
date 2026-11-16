@@ -16,6 +16,8 @@ app.config["AUTH_API_INTERNAL_URL"] = os.environ.get(
 app.config["STORAGE_UI_URL"] = os.environ.get(
     "STORAGE_UI_URL", "https://storage-dev.clusterkeep.dev.net"
 ).strip()
+app.config["STORAGE_API_URL"] = os.environ.get("STORAGE_API_URL", "").strip()
+app.config["STORAGE_API_TOKEN"] = os.environ.get("STORAGE_API_TOKEN", "").strip()
 app.config["INVITE_CODE"] = os.environ.get("INVITE_CODE", "").strip()
 app.config["AUTH_API_REGISTRATION_TOKEN"] = os.environ.get("AUTH_API_REGISTRATION_TOKEN", "").strip()
 
@@ -173,14 +175,49 @@ def _sessions_api(path, payload):
         return None
 
 
+def _storage_vault(path, session_token, payload=None):
+    base = app.config["STORAGE_API_URL"]
+    token = app.config["STORAGE_API_TOKEN"]
+    if not (base and token and session_token):
+        return None
+    try:
+        return requests.post(
+            f"{base.rstrip('/')}/api/v1/vault{path}",
+            json=payload,
+            headers={"Authorization": f"Bearer {token}"},
+            cookies={SESSION_COOKIE_NAME: session_token},
+            timeout=15,
+        )
+    except requests.RequestException:
+        return None
+
+
 def _continue_to(target):
     return make_response(render_template("continue.html", target=target))
 
 
-def _signed_in(upstream):
+def _recover_page(status=200, error=None):
+    return render_template("recover.html", error=error), status
+
+
+def _after_sign_in(body, password):
+    target = body["redirect_to"]
+    vault = _storage_vault("/unlock", body["session_token"], {"password": password})
+    if vault is not None and vault.status_code == 201:
+        response = make_response(
+            render_template("recovery_code.html", recovery_code=vault.json()["recovery_code"], target=target)
+        )
+        response.headers["Cache-Control"] = "no-store"
+        return response
+    if vault is not None and vault.status_code == 409:
+        return make_response(_recover_page())
+    return _continue_to(target)
+
+
+def _signed_in(upstream, password):
     body = upstream.json()
     cookie = body["cookie"]
-    response = _continue_to(body["redirect_to"])
+    response = _after_sign_in(body, password)
     response.set_cookie(
         cookie["name"],
         body["session_token"],
@@ -221,7 +258,7 @@ def login_submit():
     if upstream is None:
         return _sign_in_page(503, UNAVAILABLE, next_url)
     if upstream.status_code == 201:
-        return _signed_in(upstream)
+        return _signed_in(upstream, request.form.get("password", ""))
     if upstream.status_code == 409:
         return _change_page(upstream.json().get("change_token", ""))
     if upstream.status_code in SIGN_IN_ERRORS:
@@ -240,7 +277,7 @@ def change_password_submit():
     if upstream is None:
         return _change_page(change_token, 503, UNAVAILABLE)
     if upstream.status_code == 201:
-        return _signed_in(upstream)
+        return _signed_in(upstream, password)
     if upstream.status_code == 410:
         return _sign_in_page(410, "That request has expired. Sign in again.")
     if upstream.status_code == 400:
@@ -249,12 +286,34 @@ def change_password_submit():
     return _change_page(change_token, 503, UNAVAILABLE)
 
 
+@app.post("/login/recover")
+def recover_submit():
+    token = request.cookies.get(SESSION_COOKIE_NAME, "")
+    if not token:
+        return _sign_in_page(401, "Your session has ended. Log in again.")
+    upstream = _storage_vault(
+        "/recover",
+        token,
+        {"recovery_code": request.form.get("recovery_code", ""), "password": request.form.get("password", "")},
+    )
+    if upstream is None:
+        return _recover_page(503, UNAVAILABLE)
+    if upstream.status_code == 200:
+        return _continue_to(app.config["STORAGE_UI_URL"])
+    if upstream.status_code == 400:
+        return _recover_page(400, "That recovery code didn't work.")
+    if upstream.status_code == 401:
+        return _sign_in_page(401, "Your session has ended. Log in again.")
+    return _recover_page(503, UNAVAILABLE)
+
+
 @app.route("/logout", methods=["GET", "POST"])
 def logout():
     response = redirect("/", code=303)
     token = request.cookies.get(SESSION_COOKIE_NAME, "")
     if not token:
         return response
+    _storage_vault("/lock", token)
     upstream = _sessions_api("/revoke", {"session_token": token})
     if upstream is not None and upstream.status_code == 200:
         cookie = upstream.json()["cookie"]
