@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 import pytest
+import requests
 import responses as responses_lib
 
 from app import app
@@ -148,8 +149,13 @@ def test_every_utility_used_by_a_template_is_in_the_build():
         "run `npm run build:css` and commit the result"
     )
 
-def test_header_links_to_join(client):
+def test_header_links_to_log_in(client):
     body = client.get("/").get_data(as_text=True)
+    assert 'href="/login"' in body
+
+
+def test_log_in_page_links_to_join(client):
+    body = client.get("/login").get_data(as_text=True)
     assert 'href="/join"' in body
 
 def test_join_page_renders_invite_and_account_form_and_login_link(client):
@@ -158,10 +164,7 @@ def test_join_page_renders_invite_and_account_form_and_login_link(client):
     assert 'name="username"' in body
     assert 'name="email"' in body
     assert 'name="password"' in body
-    assert (
-        "https://auth-dev.clusterkeep.dev.net/login"
-        "?next=https%3A%2F%2Fstorage-dev.clusterkeep.dev.net"
-    ) in body
+    assert 'href="/login?next=https://storage-dev.clusterkeep.dev.net"' in body
 
 JOIN_FORM = {
     "invite_code": "c1u513r01K3Ep",
@@ -260,3 +263,147 @@ def test_unknown_path_shows_the_not_found_page(client):
     assert "Page not found" in body
     assert "Back to ClusterKeep" in body
     assert 'href="/"' in body
+
+
+SESSIONS_URL = "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/sessions"
+COOKIE = {"name": "ck_sso", "domain": ".clusterkeep.dev.net", "max_age": 604800, "secure": True}
+SIGN_IN_FORM = {"username": "alice", "password": "a-long-enough-password", "next": "https://storage-dev.clusterkeep.dev.net"}
+
+
+@pytest.fixture
+def frontend_token(monkeypatch):
+    monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
+
+
+def test_sign_in_page_renders_the_form_with_next(client):
+    body = client.get("/login?next=https://storage-dev.clusterkeep.dev.net").get_data(as_text=True)
+    assert 'action="/login"' in body
+    assert 'name="username"' in body
+    assert 'name="password"' in body
+    assert 'name="next" value="https://storage-dev.clusterkeep.dev.net"' in body
+
+
+def test_successful_sign_in_sets_the_session_cookie_and_redirects(client, frontend_token):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            SESSIONS_URL,
+            status=201,
+            json={"session_token": "opaque-token", "redirect_to": "https://storage-dev.clusterkeep.dev.net", "cookie": COOKIE},
+            match=[
+                responses_lib.matchers.header_matcher({"Authorization": "Bearer test-registration-token"}),
+                responses_lib.matchers.json_params_matcher(SIGN_IN_FORM),
+            ],
+        )
+        response = client.post("/login", data=SIGN_IN_FORM, follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["Location"] == "https://storage-dev.clusterkeep.dev.net"
+    cookie = response.headers["Set-Cookie"]
+    for part in ("ck_sso=opaque-token", "Domain=clusterkeep.dev.net", "Max-Age=604800", "Secure", "HttpOnly", "SameSite=Lax", "Path=/"):
+        assert part in cookie
+
+
+@pytest.mark.parametrize(
+    ("status", "message"),
+    [(401, "Incorrect username or password."), (429, "Too many failed attempts. Try again later.")],
+)
+def test_rejected_sign_in_shows_a_fixed_message(client, frontend_token, status, message):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, SESSIONS_URL, status=status, json={"detail": "<script>x</script>"})
+        response = client.post("/login", data=SIGN_IN_FORM)
+    body = response.get_data(as_text=True)
+    assert response.status_code == status
+    assert message in body
+    assert "<script>x" not in body
+    assert "Set-Cookie" not in response.headers
+
+
+def test_sign_in_fails_closed_when_auth_api_is_unreachable(client, frontend_token):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, SESSIONS_URL, body=requests.exceptions.ConnectionError("down"))
+        response = client.post("/login", data=SIGN_IN_FORM)
+    assert response.status_code == 503
+    assert "Set-Cookie" not in response.headers
+
+
+def test_flagged_account_is_shown_the_change_password_form(client, frontend_token):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, SESSIONS_URL, status=409, json={"detail": "password_change_required", "change_token": "change-123"})
+        response = client.post("/login", data=SIGN_IN_FORM)
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'action="/login/change-password"' in body
+    assert 'name="change_token" value="change-123"' in body
+    assert "Set-Cookie" not in response.headers
+
+
+CHANGE_FORM = {"change_token": "change-123", "password": "a-brand-new-passphrase", "password_repeat": "a-brand-new-passphrase"}
+
+
+def test_changing_the_password_signs_in(client, frontend_token):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            f"{SESSIONS_URL}/password-change",
+            status=201,
+            json={"session_token": "fresh-token", "redirect_to": "https://storage-dev.clusterkeep.dev.net", "cookie": COOKIE},
+            match=[responses_lib.matchers.json_params_matcher({"change_token": "change-123", "password": "a-brand-new-passphrase"})],
+        )
+        response = client.post("/login/change-password", data=CHANGE_FORM, follow_redirects=False)
+    assert response.status_code == 303
+    assert "ck_sso=fresh-token" in response.headers["Set-Cookie"]
+
+
+def test_mismatched_new_passwords_never_reach_auth_api(client, frontend_token):
+    with responses_lib.RequestsMock():
+        response = client.post("/login/change-password", data={**CHANGE_FORM, "password_repeat": "something-else-entirely"})
+    assert response.status_code == 400
+    assert "Passwords do not match." in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize(
+    ("detail", "message"),
+    [("too_short", "Use at least 12 characters."), ("unchanged", "Choose a password different from your current one.")],
+)
+def test_refused_new_password_keeps_the_change_form(client, frontend_token, detail, message):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, f"{SESSIONS_URL}/password-change", status=400, json={"detail": detail})
+        response = client.post("/login/change-password", data=CHANGE_FORM)
+    body = response.get_data(as_text=True)
+    assert response.status_code == 400
+    assert message in body
+    assert 'name="change_token" value="change-123"' in body
+
+
+def test_expired_change_request_returns_to_sign_in(client, frontend_token):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, f"{SESSIONS_URL}/password-change", status=410, json={"detail": "expired"})
+        response = client.post("/login/change-password", data=CHANGE_FORM)
+    body = response.get_data(as_text=True)
+    assert response.status_code == 410
+    assert "That request has expired. Sign in again." in body
+    assert 'action="/login"' in body
+
+
+def test_sign_out_revokes_the_session_and_clears_the_cookie(client, frontend_token):
+    client.set_cookie("ck_sso", "opaque-token")
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(
+            responses_lib.POST,
+            f"{SESSIONS_URL}/revoke",
+            status=200,
+            json={"cookie": COOKIE},
+            match=[responses_lib.matchers.json_params_matcher({"session_token": "opaque-token"})],
+        )
+        response = client.get("/logout", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["Location"] == "/"
+    cookie = response.headers["Set-Cookie"]
+    assert cookie.startswith("ck_sso=;")
+    assert "Domain=clusterkeep.dev.net" in cookie
+
+
+def test_sign_out_without_a_session_just_goes_home(client, frontend_token):
+    with responses_lib.RequestsMock():
+        response = client.get("/logout", follow_redirects=False)
+    assert response.headers["Location"] == "/"
