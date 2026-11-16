@@ -39,11 +39,6 @@ variable "ingress_enabled" {
   default     = true
 }
 
-variable "auth_api_base_url" {
-  description = "Base URL of the auth-api OIDC identity provider this environment logs in against. Set to \"\" to hide the login button."
-  type        = string
-  default     = "https://auth-dev.clusterkeep.dev.net"
-}
 
 variable "auth_api_internal_url" {
   description = "In-cluster Service URL for auth-api. Used for this backend's own server-to-server registration call -- the public hostname above only resolves for browsers, not pods."

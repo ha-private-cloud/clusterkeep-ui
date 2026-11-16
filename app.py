@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timezone
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlsplit
 
 import requests
 from flask import Flask, redirect, render_template, request, url_for
@@ -8,10 +8,8 @@ from flask import Flask, redirect, render_template, request, url_for
 app = Flask(__name__)
 
 APP_TITLE = os.environ.get("APP_TITLE", "ClusterKeep")
+SESSION_COOKIE_NAME = "ck_sso"
 
-app.config["AUTH_API_BASE_URL"] = os.environ.get(
-    "AUTH_API_BASE_URL", "https://auth-dev.clusterkeep.dev.net"
-).strip()
 app.config["AUTH_API_INTERNAL_URL"] = os.environ.get(
     "AUTH_API_INTERNAL_URL", "http://auth-api.clusterkeep-dev-priv.svc.cluster.local"
 ).strip()
@@ -61,14 +59,10 @@ def _is_http_url(value):
 
 
 def storage_login_url():
-    auth_api_base_url = app.config["AUTH_API_BASE_URL"]
     storage_ui_url = app.config["STORAGE_UI_URL"]
-    if not (auth_api_base_url and storage_ui_url):
-        return None
-    if not (_is_http_url(auth_api_base_url) and _is_http_url(storage_ui_url)):
-        return None
-    query = urlencode({"next": storage_ui_url})
-    return f"{auth_api_base_url.rstrip('/')}/login?{query}"
+    if storage_ui_url and _is_http_url(storage_ui_url):
+        return url_for("login", next=storage_ui_url)
+    return url_for("login")
 
 
 def _register_with_auth_api(username, password, email):
@@ -150,6 +144,118 @@ def join():
         error=error,
         storage_login_url=storage_login_url(),
     )
+
+
+SIGN_IN_ERRORS = {
+    401: "Incorrect username or password.",
+    429: "Too many failed attempts. Try again later.",
+}
+NEW_PASSWORD_ERRORS = {
+    "too_short": "Use at least 12 characters.",
+    "unchanged": "Choose a password different from your current one.",
+}
+UNAVAILABLE = "Sign-in is unavailable right now. Try again shortly."
+
+
+def _sessions_api(path, payload):
+    base = app.config["AUTH_API_INTERNAL_URL"]
+    token = app.config["AUTH_API_REGISTRATION_TOKEN"]
+    if not (base and token):
+        return None
+    try:
+        return requests.post(
+            f"{base.rstrip('/')}/api/v1/sessions{path}",
+            json=payload,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=5,
+        )
+    except requests.RequestException:
+        return None
+
+
+def _signed_in(upstream):
+    body = upstream.json()
+    cookie = body["cookie"]
+    response = redirect(body["redirect_to"], code=303)
+    response.set_cookie(
+        cookie["name"],
+        body["session_token"],
+        max_age=cookie["max_age"],
+        domain=cookie["domain"],
+        secure=cookie["secure"],
+        httponly=True,
+        samesite="Lax",
+        path="/",
+    )
+    return response
+
+
+def _sign_in_page(status=200, error=None, next_url=""):
+    return render_template("login.html", mode="sign_in", error=error, next=next_url), status
+
+
+def _change_page(change_token, status=200, error=None):
+    return render_template("login.html", mode="change", error=error, change_token=change_token), status
+
+
+@app.get("/login")
+def login():
+    return _sign_in_page(next_url=request.args.get("next", ""))
+
+
+@app.post("/login")
+def login_submit():
+    next_url = request.form.get("next", "")
+    upstream = _sessions_api(
+        "",
+        {
+            "username": request.form.get("username", ""),
+            "password": request.form.get("password", ""),
+            "next": next_url,
+        },
+    )
+    if upstream is None:
+        return _sign_in_page(503, UNAVAILABLE, next_url)
+    if upstream.status_code == 201:
+        return _signed_in(upstream)
+    if upstream.status_code == 409:
+        return _change_page(upstream.json().get("change_token", ""))
+    if upstream.status_code in SIGN_IN_ERRORS:
+        return _sign_in_page(upstream.status_code, SIGN_IN_ERRORS[upstream.status_code], next_url)
+    return _sign_in_page(503, UNAVAILABLE, next_url)
+
+
+@app.post("/login/change-password")
+def change_password_submit():
+    change_token = request.form.get("change_token", "")
+    password = request.form.get("password", "")
+    if password != request.form.get("password_repeat", ""):
+        return _change_page(change_token, 400, "Passwords do not match.")
+
+    upstream = _sessions_api("/password-change", {"change_token": change_token, "password": password})
+    if upstream is None:
+        return _change_page(change_token, 503, UNAVAILABLE)
+    if upstream.status_code == 201:
+        return _signed_in(upstream)
+    if upstream.status_code == 410:
+        return _sign_in_page(410, "That request has expired. Sign in again.")
+    if upstream.status_code == 400:
+        detail = upstream.json().get("detail")
+        return _change_page(change_token, 400, NEW_PASSWORD_ERRORS.get(detail, "Choose a different password."))
+    return _change_page(change_token, 503, UNAVAILABLE)
+
+
+@app.route("/logout", methods=["GET", "POST"])
+def logout():
+    response = redirect("/", code=303)
+    token = request.cookies.get(SESSION_COOKIE_NAME, "")
+    if not token:
+        return response
+    upstream = _sessions_api("/revoke", {"session_token": token})
+    if upstream is not None and upstream.status_code == 200:
+        cookie = upstream.json()["cookie"]
+        response.delete_cookie(cookie["name"], domain=cookie["domain"], path="/")
+    return response
 
 
 @app.get("/healthz")
