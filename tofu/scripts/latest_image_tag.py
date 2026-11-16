@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""Resolves the newest pushed image tag matching a prefix from a Docker
-Registry v2 API (Nexus's docker-hosted repo here), doing the bearer-token
-challenge/response dance `docker pull` does under the hood , plain Basic
-auth doesn't work directly against `/v2/.../tags/list` once Nexus's Docker
-Bearer Token Realm is enabled.
-
-Used as a Terraform `external` data source: reads a JSON query object on
-stdin, writes a JSON object of strings on stdout. Runnable standalone for
-testing without touching tofu at all, e.g.:
-
-  echo '{"registry_host":"registry.clusterkeep.dev.net","repo":"clusterkeep-ui","prefix":"DEV-","username":"","password":""}' \\
-    | python3 latest_image_tag.py
-"""
+"""Resolves the newest pushed image tag matching a prefix from a Docker Registry v2 API."""
 import json
 import re
 import ssl
@@ -22,9 +10,7 @@ from base64 import b64encode
 
 CHALLENGE_RE = re.compile(r'Bearer realm="([^"]+)",service="([^"]+)"')
 
-# Every *.clusterkeep.dev.net host sits behind ingress-nginx's self-signed default
-# cert (see cluster-config/README.md) , same "accept self-signed on the
-# LAN" reasoning cluster-cli's client.py and Kaniko's --skip-tls-verify use.
+# LAN registry uses a self-signed cert, so TLS verification is disabled here.
 _UNVERIFIED_SSL_CONTEXT = ssl._create_unverified_context()
 
 

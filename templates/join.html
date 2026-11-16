@@ -30,7 +30,7 @@
     <p class="text-stone-600 dark:text-stone-300 mb-4">
       New here? Enter your invite code and choose a username and password.
     </p>
-    <form method="post" action="{{ url_for('join') }}" class="flex flex-col gap-4">
+    <form id="join-form" method="post" action="{{ url_for('join') }}" class="flex flex-col gap-4">
       <input
         type="text"
         name="invite_code"
@@ -82,4 +82,8 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block head_extra %}
+<script src="{{ url_for('static', filename='js/join.js') }}" defer></script>
 {% endblock %}
