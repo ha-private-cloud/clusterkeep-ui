@@ -194,7 +194,7 @@ def test_correct_invite_code_registers_via_auth_api_and_relays_the_session_cooki
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
+            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
             status=201,
             headers={"Set-Cookie": "ck_sso=opaque-token; Domain=.clusterkeep.dev.net; HttpOnly"},
         )
@@ -236,7 +236,7 @@ def test_taken_username_shows_auth_apis_error(client, monkeypatch):
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
+            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
             status=409,
         )
         response = client.post("/join", data=JOIN_FORM)
@@ -249,7 +249,7 @@ def test_invalid_password_shows_auth_apis_specific_error(client, monkeypatch):
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
+            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
             json={"detail": [{"msg": "String should have at least 12 characters"}]},
             status=422,
         )
@@ -278,7 +278,7 @@ def test_unknown_path_shows_the_not_found_page(client):
     assert 'href="/"' in body
 
 
-SESSIONS_URL = "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/sessions"
+SESSIONS_URL = "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/sessions"
 COOKIE = {"name": "ck_sso", "domain": ".clusterkeep.dev.net", "max_age": 604800, "secure": True}
 SIGN_IN_FORM = {"username": "alice", "password": "a-long-enough-password", "next": "https://storage-dev.clusterkeep.dev.net"}
 

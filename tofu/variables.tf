@@ -43,7 +43,7 @@ variable "ingress_enabled" {
 variable "auth_api_internal_url" {
   description = "In-cluster Service URL for auth-api. Used for this backend's own server-to-server registration call -- the public hostname above only resolves for browsers, not pods."
   type        = string
-  default     = "http://auth-api.clusterkeep-dev-priv.svc.cluster.local"
+  default     = "http://auth-api.auth-dev-pub.svc.cluster.local"
 }
 
 variable "storage_ui_base_url" {
