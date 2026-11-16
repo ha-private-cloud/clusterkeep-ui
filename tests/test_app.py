@@ -11,9 +11,8 @@ TEMPLATES = REPO_ROOT / "templates"
 STATIC = REPO_ROOT / "static"
 
 @pytest.fixture
-def client(tmp_path, monkeypatch):
+def client():
     app.config["TESTING"] = True
-    monkeypatch.setitem(app.config, "LEADERBOARD_DB_PATH", str(tmp_path / "leaderboard.db"))
     with app.test_client() as c:
         yield c
 
@@ -127,8 +126,7 @@ def test_stylesheet_is_built_from_current_source():
 LOCAL_CLASSES = {"brand-mark", "mark-lg", "group", "antialiased"}
 
 def tailwind_selector(cls):
-    """Variants keep their prefix (`hover:bg-x` -> `.hover\\:bg-x:hover`), so do
-    not strip it. Everything outside [A-Za-z0-9_-] is backslash-escaped."""
+    """Escapes a class name the way Tailwind writes its selector, variant prefix included."""
     return "." + re.sub(r"([^A-Za-z0-9_-])", r"\\\1", cls)
 
 def tailwind_classes_used():
@@ -140,8 +138,7 @@ def tailwind_classes_used():
     return used
 
 def test_every_utility_used_by_a_template_is_in_the_build():
-    """style.css is committed and nothing rebuilds it in CI, so it can ship
-    stale after a template edit. The page still renders -- just wrong."""
+    """style.css is committed and not rebuilt in CI, so it can ship stale after a template edit."""
     css = (STATIC / "css" / "style.css").read_text()
     missing = sorted(
         cls for cls in tailwind_classes_used() if tailwind_selector(cls) not in css
@@ -244,37 +241,22 @@ def test_invalid_password_shows_auth_apis_specific_error(client, monkeypatch):
     assert response.status_code == 200
     assert "String should have at least 12 characters" in response.get_data(as_text=True)
 
-def test_game_page_renders_empty_leaderboard(client):
-    body = client.get("/game").get_data(as_text=True)
-    assert "No scores yet" in body
+def test_game_page_has_been_removed(client):
+    assert client.get("/game").status_code == 404
 
-def test_submitting_a_score_adds_it_to_the_leaderboard(client):
-    response = client.post("/game/score", json={"initials": "abc", "score": 42})
-    assert response.status_code == 201
-    assert response.get_json()["leaderboard"][0] == {"initials": "ABC", "score": 42}
 
-def test_leaderboard_is_ordered_highest_first_and_capped(client):
-    for i in range(12):
-        client.post("/game/score", json={"initials": "AAA", "score": i})
-    response = client.post("/game/score", json={"initials": "ZZZ", "score": 999})
-    scores = [entry["score"] for entry in response.get_json()["leaderboard"]]
-    assert scores == sorted(scores, reverse=True)
-    assert len(scores) == 10
-    assert scores[0] == 999
+def test_score_endpoint_has_been_removed(client):
+    assert client.post("/game/score", json={"initials": "abc", "score": 1}).status_code in (404, 405)
 
-def test_score_submission_rejects_bad_initials(client):
-    response = client.post("/game/score", json={"initials": "a!1", "score": 5})
-    assert response.status_code == 400
 
-def test_score_submission_accepts_alphanumeric_initials(client):
-    response = client.post("/game/score", json={"initials": "a1b", "score": 5})
-    assert response.status_code == 201
-    assert response.get_json()["leaderboard"][0]["initials"] == "A1B"
+def test_index_no_longer_links_to_the_game(client):
+    assert "Play Game" not in client.get("/").get_data(as_text=True)
 
-def test_score_submission_rejects_non_integer_score(client):
-    response = client.post("/game/score", json={"initials": "abc", "score": "5"})
-    assert response.status_code == 400
 
-def test_score_submission_rejects_out_of_range_score(client):
-    response = client.post("/game/score", json={"initials": "abc", "score": 5_000_000})
-    assert response.status_code == 400
+def test_unknown_path_shows_the_not_found_page(client):
+    resp = client.get("/does-not-exist")
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 404
+    assert "Page not found" in body
+    assert "Back to ClusterKeep" in body
+    assert 'href="/"' in body
