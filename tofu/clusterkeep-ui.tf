@@ -30,11 +30,20 @@ data "external" "clusterkeep_ui_latest_tag" {
   }
 }
 
+data "external" "clusterkeep_ui_release_tag" {
+  count   = var.image_tag_prefix == "" && var.image_tag == "" ? 1 : 0
+  program = ["python3", "${path.module}/scripts/latest_release_tag.py"]
+
+  query = {
+    repo_dir = abspath("${path.module}/..")
+  }
+}
+
 locals {
   deployed_image_tag = (
-    var.image_tag_prefix != "" && data.external.clusterkeep_ui_latest_tag.result.tag != ""
-    ? data.external.clusterkeep_ui_latest_tag.result.tag
-    : var.image_tag
+    var.image_tag_prefix != ""
+    ? (data.external.clusterkeep_ui_latest_tag.result.tag != "" ? data.external.clusterkeep_ui_latest_tag.result.tag : var.image_tag)
+    : (var.image_tag != "" ? var.image_tag : data.external.clusterkeep_ui_release_tag[0].result.tag)
   )
 }
 
@@ -47,6 +56,7 @@ resource "kubernetes_secret" "clusterkeep_ui_invite_code" {
   data = {
     INVITE_CODE                 = var.invite_code
     AUTH_API_REGISTRATION_TOKEN = var.registration_token
+    STORAGE_API_TOKEN           = var.storage_api_token
   }
 }
 
@@ -73,6 +83,16 @@ resource "helm_release" "clusterkeep_ui" {
       env = [
         { name = "AUTH_API_INTERNAL_URL", value = var.auth_api_internal_url },
         { name = "STORAGE_UI_URL", value = var.storage_ui_base_url },
+        { name = "STORAGE_API_URL", value = var.storage_api_url },
+        {
+          name = "STORAGE_API_TOKEN"
+          valueFrom = {
+            secretKeyRef = {
+              name = kubernetes_secret.clusterkeep_ui_invite_code.metadata[0].name
+              key  = "STORAGE_API_TOKEN"
+            }
+          }
+        },
         {
           name = "INVITE_CODE"
           valueFrom = {

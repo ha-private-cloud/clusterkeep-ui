@@ -1,3 +1,4 @@
+import html
 import re
 from pathlib import Path
 
@@ -194,7 +195,7 @@ def test_correct_invite_code_registers_via_auth_api_and_relays_the_session_cooki
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
+            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
             status=201,
             headers={"Set-Cookie": "ck_sso=opaque-token; Domain=.clusterkeep.dev.net; HttpOnly"},
         )
@@ -236,7 +237,7 @@ def test_taken_username_shows_auth_apis_error(client, monkeypatch):
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
+            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
             status=409,
         )
         response = client.post("/join", data=JOIN_FORM)
@@ -249,7 +250,7 @@ def test_invalid_password_shows_auth_apis_specific_error(client, monkeypatch):
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/register",
+            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
             json={"detail": [{"msg": "String should have at least 12 characters"}]},
             status=422,
         )
@@ -278,7 +279,7 @@ def test_unknown_path_shows_the_not_found_page(client):
     assert 'href="/"' in body
 
 
-SESSIONS_URL = "http://auth-api.clusterkeep-dev-priv.svc.cluster.local/api/v1/sessions"
+SESSIONS_URL = "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/sessions"
 COOKIE = {"name": "ck_sso", "domain": ".clusterkeep.dev.net", "max_age": 604800, "secure": True}
 SIGN_IN_FORM = {"username": "alice", "password": "a-long-enough-password", "next": "https://storage-dev.clusterkeep.dev.net"}
 
@@ -419,3 +420,117 @@ def test_sign_out_without_a_session_just_goes_home(client, frontend_token):
     with responses_lib.RequestsMock():
         response = client.get("/logout", follow_redirects=False)
     assert response.headers["Location"] == "/"
+
+
+STORAGE_URL = "http://storage-api.storage-dev-priv.svc.cluster.local"
+SIGNED_IN = {"session_token": "opaque-token", "redirect_to": "https://storage-dev.clusterkeep.dev.net", "cookie": COOKIE}
+
+
+@pytest.fixture
+def storage(monkeypatch, frontend_token):
+    monkeypatch.setitem(app.config, "STORAGE_API_URL", STORAGE_URL)
+    monkeypatch.setitem(app.config, "STORAGE_API_TOKEN", "test-storage-token")
+
+
+def storage_call(rsps, path, status, body, json_match=None, session="opaque-token"):
+    matchers = [
+        responses_lib.matchers.header_matcher({"Authorization": "Bearer test-storage-token", "Cookie": f"ck_sso={session}"})
+    ]
+    if json_match is not None:
+        matchers.append(responses_lib.matchers.json_params_matcher(json_match))
+    rsps.add(responses_lib.POST, f"{STORAGE_URL}/api/v1/vault{path}", status=status, json=body, match=matchers)
+
+
+def test_first_sign_in_shows_the_recovery_code_once(client, storage):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, SESSIONS_URL, status=201, json=SIGNED_IN)
+        storage_call(rsps, "/unlock", 201, {"status": "created", "recovery_code": "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567"},
+                     json_match={"password": "a-long-enough-password"})
+        response = client.post("/login", data=SIGN_IN_FORM)
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567" in body
+    assert 'href="https://storage-dev.clusterkeep.dev.net"' in body
+    assert 'http-equiv="refresh"' not in body
+    assert "ck_sso=opaque-token" in response.headers["Set-Cookie"]
+
+
+def test_unlocked_storage_continues_as_normal(client, storage):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, SESSIONS_URL, status=201, json=SIGNED_IN)
+        storage_call(rsps, "/unlock", 200, {"status": "unlocked"})
+        response = client.post("/login", data=SIGN_IN_FORM)
+    assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
+
+
+def test_a_reset_password_asks_for_the_recovery_code(client, storage):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, SESSIONS_URL, status=201, json=SIGNED_IN)
+        storage_call(rsps, "/unlock", 409, {"detail": "recovery_required"})
+        response = client.post("/login", data=SIGN_IN_FORM)
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert 'action="/login/recover"' in body
+    assert 'name="recovery_code"' in body
+    assert "ck_sso=opaque-token" in response.headers["Set-Cookie"]
+
+
+def test_sign_in_still_works_when_storage_is_unreachable(client, storage):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, SESSIONS_URL, status=201, json=SIGNED_IN)
+        rsps.add(responses_lib.POST, f"{STORAGE_URL}/api/v1/vault/unlock", body=requests.exceptions.ConnectionError("down"))
+        response = client.post("/login", data=SIGN_IN_FORM)
+    assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
+
+
+def test_sign_in_skips_storage_when_it_is_not_configured(client, frontend_token):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, SESSIONS_URL, status=201, json=SIGNED_IN)
+        response = client.post("/login", data=SIGN_IN_FORM)
+    assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
+
+
+RECOVER_FORM = {"recovery_code": "abcde fghjk lmnpq rstuv wxyz2 34567", "password": "the-current-password"}
+
+
+def test_a_correct_recovery_code_unlocks_storage(client, storage):
+    client.set_cookie("ck_sso", "opaque-token")
+    with responses_lib.RequestsMock() as rsps:
+        storage_call(rsps, "/recover", 200, {"status": "unlocked"}, json_match=RECOVER_FORM)
+        response = client.post("/login/recover", data=RECOVER_FORM)
+    assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
+
+
+def test_a_wrong_recovery_code_shows_an_error(client, storage):
+    client.set_cookie("ck_sso", "opaque-token")
+    with responses_lib.RequestsMock() as rsps:
+        storage_call(rsps, "/recover", 400, {"detail": "invalid_recovery_code"})
+        response = client.post("/login/recover", data=RECOVER_FORM)
+    assert response.status_code == 400
+    assert "That recovery code didn't work." in html.unescape(response.get_data(as_text=True))
+
+
+def test_recovery_without_a_session_goes_back_to_log_in(client, storage):
+    with responses_lib.RequestsMock():
+        response = client.post("/login/recover", data=RECOVER_FORM)
+    assert response.status_code == 401
+    assert 'action="/login"' in response.get_data(as_text=True)
+
+
+def test_a_changed_password_unlocks_storage_with_the_new_password(client, storage):
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, f"{SESSIONS_URL}/password-change", status=201,
+                 json={**SIGNED_IN, "session_token": "fresh-token"})
+        storage_call(rsps, "/unlock", 200, {"status": "unlocked"}, json_match={"password": "a-brand-new-passphrase"},
+                     session="fresh-token")
+        response = client.post("/login/change-password", data=CHANGE_FORM)
+    assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
+
+
+def test_sign_out_locks_storage_before_ending_the_session(client, storage):
+    client.set_cookie("ck_sso", "opaque-token")
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, f"{STORAGE_URL}/api/v1/vault/lock", status=204)
+        rsps.add(responses_lib.POST, f"{SESSIONS_URL}/revoke", status=200, json={"cookie": COOKIE})
+        client.get("/logout")
+        assert [c.request.url.split("/api/")[1] for c in rsps.calls] == ["v1/vault/lock", "v1/sessions/revoke"]
