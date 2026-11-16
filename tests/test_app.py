@@ -166,6 +166,20 @@ def test_join_page_renders_invite_and_account_form_and_login_link(client):
     assert 'name="password"' in body
     assert 'href="/login?next=https://storage-dev.clusterkeep.dev.net"' in body
 
+def assert_continues_to(response, target):
+    """Cross-site redirects after a form POST are blocked by form-action 'self', so sign-in continues via meta refresh."""
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Location" not in response.headers
+    assert f'<meta http-equiv="refresh" content="0; url={target}"' in body
+    assert f'href="{target}"' in body
+
+
+def test_form_action_stays_self_only(client):
+    csp = client.get("/login").headers["Content-Security-Policy"]
+    assert "form-action 'self'" in csp
+
+
 JOIN_FORM = {
     "invite_code": "c1u513r01K3Ep",
     "username": "newuser",
@@ -185,8 +199,7 @@ def test_correct_invite_code_registers_via_auth_api_and_relays_the_session_cooki
             headers={"Set-Cookie": "ck_sso=opaque-token; Domain=.clusterkeep.dev.net; HttpOnly"},
         )
         response = client.post("/join", data=JOIN_FORM, follow_redirects=False)
-    assert response.status_code == 302
-    assert response.headers["Location"] == "https://storage-dev.clusterkeep.dev.net"
+    assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
     assert "ck_sso" in response.headers.get("Set-Cookie", "")
 
 def test_wrong_invite_code_is_rejected_without_calling_auth_api(client, monkeypatch):
@@ -296,8 +309,7 @@ def test_successful_sign_in_sets_the_session_cookie_and_redirects(client, fronte
             ],
         )
         response = client.post("/login", data=SIGN_IN_FORM, follow_redirects=False)
-    assert response.status_code == 303
-    assert response.headers["Location"] == "https://storage-dev.clusterkeep.dev.net"
+    assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
     cookie = response.headers["Set-Cookie"]
     for part in ("ck_sso=opaque-token", "Domain=clusterkeep.dev.net", "Max-Age=604800", "Secure", "HttpOnly", "SameSite=Lax", "Path=/"):
         assert part in cookie
@@ -350,7 +362,7 @@ def test_changing_the_password_signs_in(client, frontend_token):
             match=[responses_lib.matchers.json_params_matcher({"change_token": "change-123", "password": "a-brand-new-passphrase"})],
         )
         response = client.post("/login/change-password", data=CHANGE_FORM, follow_redirects=False)
-    assert response.status_code == 303
+    assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
     assert "ck_sso=fresh-token" in response.headers["Set-Cookie"]
 
 

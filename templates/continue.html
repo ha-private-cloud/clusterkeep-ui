@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block page_title %}Signing you in · {{ title }}{% endblock %}
+
+{% block head_extra %}
+<meta http-equiv="refresh" content="0; url={{ target }}" />
+{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center text-center max-w-md mx-auto">
+  <h1
+    class="font-display text-4xl font-bold text-stone-900 dark:text-stone-50 tracking-tight leading-tight mb-6"
+  >
+    Signing you in
+  </h1>
+  <a
+    href="{{ target }}"
+    class="inline-flex items-center justify-center w-full px-6 py-3 text-base font-semibold text-white bg-amber-700 rounded-lg hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-700 dark:focus-visible:ring-offset-stone-950"
+  >
+    Continue
+  </a>
+</div>
+{% endblock %}
