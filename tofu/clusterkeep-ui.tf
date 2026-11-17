@@ -47,6 +47,11 @@ locals {
   )
 }
 
+resource "random_password" "invite_code" {
+  length  = 32
+  special = false
+}
+
 resource "kubernetes_secret" "clusterkeep_ui_invite_code" {
   metadata {
     name      = "clusterkeep-ui-invite-code"
@@ -54,7 +59,7 @@ resource "kubernetes_secret" "clusterkeep_ui_invite_code" {
   }
 
   data = {
-    INVITE_CODE                 = var.invite_code
+    INVITE_CODE                 = random_password.invite_code.result
     AUTH_API_REGISTRATION_TOKEN = var.registration_token
     STORAGE_API_TOKEN           = var.storage_api_token
   }

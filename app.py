@@ -1,3 +1,4 @@
+import hmac
 import os
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
@@ -130,7 +131,7 @@ def join():
         password_confirm = request.form.get("password_confirm", "")
         expected = app.config["INVITE_CODE"]
 
-        if not (expected and submitted_code == expected):
+        if not (expected and hmac.compare_digest(submitted_code.encode(), expected.encode())):
             error = "That invite code is not valid."
         elif not email:
             error = "An email address is required."
