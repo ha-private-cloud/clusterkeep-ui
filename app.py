@@ -1,4 +1,3 @@
-import hmac
 import os
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
@@ -19,7 +18,6 @@ app.config["STORAGE_UI_URL"] = os.environ.get(
 ).strip()
 app.config["STORAGE_API_URL"] = os.environ.get("STORAGE_API_URL", "").strip()
 app.config["STORAGE_API_TOKEN"] = os.environ.get("STORAGE_API_TOKEN", "").strip()
-app.config["INVITE_CODE"] = os.environ.get("INVITE_CODE", "").strip()
 app.config["AUTH_API_REGISTRATION_TOKEN"] = os.environ.get("AUTH_API_REGISTRATION_TOKEN", "").strip()
 
 CONTENT_SECURITY_POLICY = "; ".join(
@@ -68,7 +66,10 @@ def storage_login_url():
     return url_for("login")
 
 
-def _register_with_auth_api(username, password, email):
+INVALID_INVITE = "That invite link isn't valid. It may have been used, withdrawn or expired, so ask for a new one."
+
+
+def _register_with_auth_api(username, password, email, invite):
     """Registers the account with auth-api server-to-server, using this backend's bearer token."""
     auth_api_internal_url = app.config["AUTH_API_INTERNAL_URL"]
     registration_token = app.config["AUTH_API_REGISTRATION_TOKEN"]
@@ -78,7 +79,7 @@ def _register_with_auth_api(username, password, email):
     try:
         upstream = requests.post(
             f"{auth_api_internal_url.rstrip('/')}/api/v1/register",
-            json={"username": username, "password": password, "email": email},
+            json={"username": username, "password": password, "email": email, "invite": invite},
             headers={"Authorization": f"Bearer {registration_token}"},
             timeout=5,
         )
@@ -91,6 +92,8 @@ def _register_with_auth_api(username, password, email):
         if cookie_header:
             response.headers["Set-Cookie"] = cookie_header
         return response, None
+    if upstream.status_code == 403:
+        return None, INVALID_INVITE
     if upstream.status_code == 409:
         return None, "That username is already taken."
     if upstream.status_code == 422:
@@ -123,28 +126,29 @@ def index():
 @app.route("/join", methods=["GET", "POST"])
 def join():
     error = None
+    invite = (request.form.get("invite") if request.method == "POST" else request.args.get("invite")) or ""
+    invite = invite.strip()[:128]
     if request.method == "POST":
-        submitted_code = request.form.get("invite_code", "")
         username = request.form.get("username", "")
         email = request.form.get("email", "")
         password = request.form.get("password", "")
         password_confirm = request.form.get("password_confirm", "")
-        expected = app.config["INVITE_CODE"]
 
-        if not (expected and hmac.compare_digest(submitted_code.encode(), expected.encode())):
-            error = "That invite code is not valid."
+        if not invite:
+            error = INVALID_INVITE
         elif not email:
             error = "An email address is required."
         elif password != password_confirm:
             error = "Passwords do not match."
         else:
-            response, error = _register_with_auth_api(username, password, email)
+            response, error = _register_with_auth_api(username, password, email, invite)
             if response is not None:
                 return response
 
     return render_template(
         "join.html",
         error=error,
+        invite=invite,
         storage_login_url=storage_login_url(),
     )
 
