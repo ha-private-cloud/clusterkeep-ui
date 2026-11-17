@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timezone
+from http.cookies import CookieError, SimpleCookie
 from urllib.parse import urlsplit
 
 import requests
@@ -87,18 +88,40 @@ def _register_with_auth_api(username, password, email, invite):
         return None, "Could not reach the account service. Try again shortly."
 
     if upstream.status_code == 201:
-        response = _continue_to(app.config["STORAGE_UI_URL"])
         cookie_header = upstream.headers.get("Set-Cookie")
+        session = {"session_token": _session_from(cookie_header), "redirect_to": app.config["STORAGE_UI_URL"]}
+        response = _after_sign_in(session, password)
         if cookie_header:
             response.headers["Set-Cookie"] = cookie_header
         return response, None
     if upstream.status_code == 403:
         return None, INVALID_INVITE
     if upstream.status_code == 409:
+        if _detail(upstream) == "email already exists":
+            return None, "That email address already has an account."
         return None, "That username is already taken."
     if upstream.status_code == 422:
         return None, _describe_validation_error(upstream)
     return None, "Could not create that account."
+
+
+def _session_from(cookie_header):
+    if not cookie_header:
+        return None
+    cookie = SimpleCookie()
+    try:
+        cookie.load(cookie_header)
+    except CookieError:
+        return None
+    morsel = cookie.get(SESSION_COOKIE_NAME)
+    return morsel.value if morsel else None
+
+
+def _detail(upstream):
+    try:
+        return upstream.json().get("detail")
+    except (ValueError, AttributeError):
+        return None
 
 
 def _describe_validation_error(upstream):
