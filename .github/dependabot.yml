@@ -1,0 +1,65 @@
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: Chore
+    groups:
+      uv:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: npm
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: Chore
+    groups:
+      npm:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: Chore
+    groups:
+      docker:
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: opentofu
+    directory: /tofu
+    target-branch: development
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: Chore
+    groups:
+      opentofu:
+        update-types:
+          - minor
+          - patch
