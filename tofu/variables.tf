@@ -53,12 +53,6 @@ variable "storage_ui_base_url" {
   default     = "https://storage-dev.clusterkeep.dev.net"
 }
 
-variable "invite_code" {
-  description = "Invite code required to create an account via the /join page."
-  type        = string
-  sensitive   = true
-}
-
 variable "registration_token" {
   description = "Shared bearer token /join presents to auth-api's POST /api/v1/register. Must match auth-api's registration_token exactly."
   type        = string
