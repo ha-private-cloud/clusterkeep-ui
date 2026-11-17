@@ -542,3 +542,27 @@ def test_sign_out_locks_storage_before_ending_the_session(client, storage):
         rsps.add(responses_lib.POST, f"{SESSIONS_URL}/revoke", status=200, json={"cookie": COOKIE})
         client.get("/logout")
         assert [c.request.url.split("/api/")[1] for c in rsps.calls] == ["v1/vault/lock", "v1/sessions/revoke"]
+
+
+def test_a_new_account_sees_its_recovery_code_straight_away(client, storage, monkeypatch):
+    monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, REGISTER_URL, status=201,
+                 headers={"Set-Cookie": "ck_sso=opaque-token; Domain=.clusterkeep.dev.net; HttpOnly; Path=/; Secure"})
+        storage_call(rsps, "/unlock", 201, {"status": "created", "recovery_code": "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567"},
+                     json_match={"password": "a-long-enough-password"})
+        response = client.post("/join", data=JOIN_FORM)
+    body = response.get_data(as_text=True)
+    assert "ABCDE-FGHJK-LMNPQ-RSTUV-WXYZ2-34567" in body
+    assert 'href="https://storage-dev.clusterkeep.dev.net"' in body
+    assert 'http-equiv="refresh"' not in body
+    assert response.headers["Cache-Control"] == "no-store"
+    assert "ck_sso=opaque-token" in response.headers["Set-Cookie"]
+
+
+def test_an_email_already_in_use_says_so(client, monkeypatch):
+    monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, REGISTER_URL, status=409, json={"detail": "email already exists"})
+        response = client.post("/join", data=JOIN_FORM)
+    assert "That email address already has an account." in html.unescape(response.get_data(as_text=True))
