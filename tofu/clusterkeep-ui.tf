@@ -47,11 +47,6 @@ locals {
   )
 }
 
-resource "random_password" "invite_code" {
-  length  = 32
-  special = false
-}
-
 resource "kubernetes_secret" "clusterkeep_ui_invite_code" {
   metadata {
     name      = "clusterkeep-ui-invite-code"
@@ -59,7 +54,6 @@ resource "kubernetes_secret" "clusterkeep_ui_invite_code" {
   }
 
   data = {
-    INVITE_CODE                 = random_password.invite_code.result
     AUTH_API_REGISTRATION_TOKEN = var.registration_token
     STORAGE_API_TOKEN           = var.storage_api_token
   }
@@ -95,15 +89,6 @@ resource "helm_release" "clusterkeep_ui" {
             secretKeyRef = {
               name = kubernetes_secret.clusterkeep_ui_invite_code.metadata[0].name
               key  = "STORAGE_API_TOKEN"
-            }
-          }
-        },
-        {
-          name = "INVITE_CODE"
-          valueFrom = {
-            secretKeyRef = {
-              name = kubernetes_secret.clusterkeep_ui_invite_code.metadata[0].name
-              key  = "INVITE_CODE"
             }
           }
         },

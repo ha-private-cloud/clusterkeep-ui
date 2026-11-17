@@ -159,13 +159,23 @@ def test_log_in_page_links_to_join(client):
     body = client.get("/login").get_data(as_text=True)
     assert 'href="/join"' in body
 
-def test_join_page_renders_invite_and_account_form_and_login_link(client):
+def test_join_page_without_an_invite_asks_for_one_and_shows_no_form(client):
     body = client.get("/join").get_data(as_text=True)
-    assert 'name="invite_code"' in body
+    assert "You need an invite link" in body
+    assert 'name="username"' not in body
+    assert 'href="/login?next=https://storage-dev.clusterkeep.dev.net"' in body
+
+def test_join_page_with_an_invite_carries_it_in_the_form(client):
+    body = client.get("/join?invite=abc123").get_data(as_text=True)
+    assert 'name="invite" value="abc123"' in body
     assert 'name="username"' in body
     assert 'name="email"' in body
     assert 'name="password"' in body
-    assert 'href="/login?next=https://storage-dev.clusterkeep.dev.net"' in body
+    assert 'name="invite_code"' not in body
+
+def test_invite_from_the_link_is_escaped(client):
+    body = client.get('/join?invite="><script>x</script>').get_data(as_text=True)
+    assert "<script>x" not in body
 
 def assert_continues_to(response, target):
     """Cross-site redirects after a form POST are blocked by form-action 'self', so sign-in continues via meta refresh."""
@@ -182,49 +192,53 @@ def test_form_action_stays_self_only(client):
 
 
 JOIN_FORM = {
-    "invite_code": "c1u513r01K3Ep",
+    "invite": "invite-token-from-the-link",
     "username": "newuser",
     "email": "newuser@example.com",
     "password": "a-long-enough-password",
     "password_confirm": "a-long-enough-password",
 }
+REGISTER_URL = "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register"
 
-def test_correct_invite_code_registers_via_auth_api_and_relays_the_session_cookie(client, monkeypatch):
-    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+def test_join_registers_via_auth_api_with_the_invite_and_relays_the_session_cookie(client, monkeypatch):
     monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
+            REGISTER_URL,
             status=201,
             headers={"Set-Cookie": "ck_sso=opaque-token; Domain=.clusterkeep.dev.net; HttpOnly"},
+            match=[responses_lib.matchers.json_params_matcher({
+                "username": "newuser", "password": "a-long-enough-password",
+                "email": "newuser@example.com", "invite": "invite-token-from-the-link",
+            })],
         )
         response = client.post("/join", data=JOIN_FORM, follow_redirects=False)
     assert_continues_to(response, "https://storage-dev.clusterkeep.dev.net")
     assert "ck_sso" in response.headers.get("Set-Cookie", "")
 
-def test_wrong_invite_code_is_rejected_without_calling_auth_api(client, monkeypatch):
-    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+def test_missing_invite_is_rejected_without_calling_auth_api(client):
     with responses_lib.RequestsMock(assert_all_requests_are_fired=False) as rsps:
-        response = client.post("/join", data={**JOIN_FORM, "invite_code": "wrong-code"})
+        response = client.post("/join", data={**JOIN_FORM, "invite": ""})
         assert len(rsps.calls) == 0
     assert response.status_code == 200
-    assert "is not valid" in response.get_data(as_text=True)
+    assert "invite link isn" in response.get_data(as_text=True)
 
-def test_invite_code_check_fails_closed_when_unconfigured(client, monkeypatch):
-    monkeypatch.setitem(app.config, "INVITE_CODE", "")
-    response = client.post("/join", data={**JOIN_FORM, "invite_code": ""})
-    assert response.status_code == 200
-    assert "is not valid" in response.get_data(as_text=True)
+def test_used_or_expired_invite_shows_a_clear_message(client, monkeypatch):
+    monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
+    with responses_lib.RequestsMock() as rsps:
+        rsps.add(responses_lib.POST, REGISTER_URL, json={"detail": "invalid_invite"}, status=403)
+        response = client.post("/join", data=JOIN_FORM)
+    body = response.get_data(as_text=True)
+    assert "It may have been used, withdrawn or expired" in body
+    assert 'name="invite" value="invite-token-from-the-link"' in body
 
-def test_mismatched_passwords_are_rejected(client, monkeypatch):
-    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+def test_mismatched_passwords_are_rejected(client):
     response = client.post("/join", data={**JOIN_FORM, "password_confirm": "something-else"})
     assert response.status_code == 200
     assert "do not match" in response.get_data(as_text=True)
 
-def test_missing_email_is_rejected_without_calling_auth_api(client, monkeypatch):
-    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
+def test_missing_email_is_rejected_without_calling_auth_api(client):
     with responses_lib.RequestsMock(assert_all_requests_are_fired=False) as rsps:
         response = client.post("/join", data={**JOIN_FORM, "email": ""})
         assert len(rsps.calls) == 0
@@ -232,25 +246,19 @@ def test_missing_email_is_rejected_without_calling_auth_api(client, monkeypatch)
     assert "email address is required" in response.get_data(as_text=True)
 
 def test_taken_username_shows_auth_apis_error(client, monkeypatch):
-    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
     monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
     with responses_lib.RequestsMock() as rsps:
-        rsps.add(
-            responses_lib.POST,
-            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
-            status=409,
-        )
+        rsps.add(responses_lib.POST, REGISTER_URL, status=409)
         response = client.post("/join", data=JOIN_FORM)
     assert response.status_code == 200
     assert "already taken" in response.get_data(as_text=True)
 
 def test_invalid_password_shows_auth_apis_specific_error(client, monkeypatch):
-    monkeypatch.setitem(app.config, "INVITE_CODE", "c1u513r01K3Ep")
     monkeypatch.setitem(app.config, "AUTH_API_REGISTRATION_TOKEN", "test-registration-token")
     with responses_lib.RequestsMock() as rsps:
         rsps.add(
             responses_lib.POST,
-            "http://auth-api.auth-dev-pub.svc.cluster.local/api/v1/register",
+            REGISTER_URL,
             json={"detail": [{"msg": "String should have at least 12 characters"}]},
             status=422,
         )
