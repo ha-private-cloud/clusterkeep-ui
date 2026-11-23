@@ -23,7 +23,7 @@
   "homepage": "https://github.com/ha-private-cloud/clusterkeep-ui#readme",
   "devDependencies": {
     "autoprefixer": "^10.6.2",
-    "postcss": "^8.5.32",
+    "postcss": "^8.5.33",
     "tailwindcss": "^3.4.19"
   }
 }
